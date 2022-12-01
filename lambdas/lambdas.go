@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"golambda/httpClient"
-	"golambda/utils"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -31,7 +29,7 @@ type Request struct {
 	MobileNumber    string `json:"mobileNumber"`
 	MessageBody     string `json:"messageBody"`
 	TrackerObjectId string `json:"trackerObjectId"`
-	RecepientName   string `json:"recepientName"`
+	RecipientName   string `json:"recipientName"`
 	EmailSubject    string `json:"emailSubject"`
 }
 type Response struct {
@@ -44,152 +42,115 @@ func Handler(ctx context.Context, sqsEvent events.SQSEvent) error {
 	var request Request
 	AWS_S3_REGION := os.Getenv("AWS_S3_REGION")
 	AWS_S3_BUCKET := os.Getenv("AWS_S3_BUCKET")
-	AWS_CA_KEY := os.Getenv("AWS_CA_KEY")
-	AWS_CERT_KEY := os.Getenv("AWS_CERT_KEY")
-    AWS_INTER_KEY := os.Getenv("AWS_INTER_KEY")
+	AWS_ROOT_CERT_S3_KEY := os.Getenv("AWS_ROOT_CERT_S3_KEY")
+	AWS_CA_CHAIN_CERT_S3_KEY := os.Getenv("AWS_CA_CHAIN_CERT_S3_KEY")
+	AWS_ROOT_CERT_KEY_S3_KEY := os.Getenv("AWS_ROOT_CERT_KEY_S3_KEY")
+	var response Response
+	for _, message := range sqsEvent.Records {
+		fmt.Printf("Message Body queue: %s", message.Body)
+		errJson := json.Unmarshal([]byte(message.Body), &request)
+		if errJson != nil {
+			devMessage := errJson.Error()
+			updateTracker(&request, &response, "FAILED", "", devMessage)
+			return nil
+		}
+	}
+
+	log.Println("starting, requestId--> ", request.RequestID)
+	log.Println("request--> ", request)
+
+	updateTracker(&request, &response, "CONNECTING/DOWNLOADING FILES FROM S3", "", "")
 
 	cfg, errLoadDefaultConfig := config.LoadDefaultConfig(context.TODO(), config.WithRegion(AWS_S3_REGION))
 	if errLoadDefaultConfig != nil {
+		var devMessage string
 		var oe *smithy.OperationError
 		if errors.As(errLoadDefaultConfig, &oe) {
-			log.Printf("failed to loadconfig: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			devMessage := fmt.Sprintf("failed to call service: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			clientMessage := "Something went wrong while loading config"
-			err := &utils.ErrorHandler{DevMessage: devMessage, Message: clientMessage}
-			return err
+			log.Printf("failed to load config: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
+			devMessage = fmt.Sprintf("failed to call service: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
+		} else {
+			devMessage = errLoadDefaultConfig.Error()
 		}
-		return errLoadDefaultConfig
+		updateTracker(&request, &response, "FAILED", "", devMessage)
+		return nil
 	}
-
 	awsS3Client := s3.NewFromConfig(cfg)
-	var certificate string
-
-	// certificate file
-	certFile, errCreatefile := create(certificate)
-	if errCreatefile != nil {
-		var oe *smithy.OperationError
-		if errors.As(errCreatefile, &oe) {
-			log.Printf("failed to create Certfile: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			devMessage := fmt.Sprintf("failed to call service: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			clientMessage := "Something went wrong while creating the file"
-			err := &utils.ErrorHandler{DevMessage: devMessage, Message: clientMessage}
-			return err
-		}
-		return errCreatefile
-	}
-	defer certFile.Close()
-
-	downloader := manager.NewDownloader(awsS3Client)
-	numBytes, errDownload := downloader.Download(context.TODO(), certFile,
-		&s3.GetObjectInput{
-			Bucket: aws.String(AWS_S3_BUCKET),
-			Key:    aws.String(AWS_CERT_KEY),
-		})
-	if errDownload != nil {
-		var oe *smithy.OperationError
-		if errors.As(errCreatefile, &oe) {
-			log.Printf("failed to download certFile: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			devMessage := fmt.Sprintf("failed to call service: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			clientMessage := "Something went wrong while downloading the certfile"
-			err := &utils.ErrorHandler{DevMessage: devMessage, Message: clientMessage}
-			return err
-		}
-		return errDownload
-	}
-
-	log.Println(numBytes)
-
-	// inter file
-	var inter string
-	interFile, errCreatefile := create(inter)
-	if errCreatefile != nil {
-		var oe *smithy.OperationError
-		if errors.As(errCreatefile, &oe) {
-			log.Printf("failed to create keyfile: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			devMessage := fmt.Sprintf("failed to call service: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			clientMessage := "Something went wrong while creating the Keyfile"
-			err := &utils.ErrorHandler{DevMessage: devMessage, Message: clientMessage}
-			return err
-		}
-		return errCreatefile
-	}
-	defer interFile.Close()
-
-	download := manager.NewDownloader(awsS3Client)
-	numByte, errDownload := download.Download(context.TODO(), interFile,
-		&s3.GetObjectInput{
-			Bucket: aws.String(AWS_S3_BUCKET),
-			Key:    aws.String(AWS_INTER_KEY),
-		})
-	if errDownload != nil {
-		var oe *smithy.OperationError
-		if errors.As(errCreatefile, &oe) {
-			log.Printf("failed to download interfile: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			devMessage := fmt.Sprintf("failed to call service: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			clientMessage := "Something went wrong while downloading the interfile"
-			err := &utils.ErrorHandler{DevMessage: devMessage, Message: clientMessage}
-			return err
-		}
-		return errDownload
-	}
-	log.Println(numByte)
-
 	//ca certificate
 
-	var ca string
-	caFile, errCreatefile := create(ca)
-	if errCreatefile != nil {
-		var oe *smithy.OperationError
-		if errors.As(errCreatefile, &oe) {
-			log.Printf("failed to create keyfile: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			devMessage := fmt.Sprintf("failed to call service: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			clientMessage := "Something went wrong while creating the Keyfile"
-			err := &utils.ErrorHandler{DevMessage: devMessage, Message: clientMessage}
-			return err
-		}
-		return errCreatefile
+	rootCertFileName := "rootCert"
+	rootCertFile, errCreateRootCertFile := create(rootCertFileName)
+	if errCreateRootCertFile != nil {
+		updateTracker(&request, &response, "FAILED", "", errCreateRootCertFile.Error())
+		return nil
 	}
-	defer caFile.Close()
 
-	downloadroot := manager.NewDownloader(awsS3Client)
-	numByteroot, errDownload := downloadroot.Download(context.TODO(), caFile,
-		&s3.GetObjectInput{
-			Bucket: aws.String(AWS_S3_BUCKET),
-			Key:    aws.String(AWS_CA_KEY),
-		})
-	if errDownload != nil {
-		var oe *smithy.OperationError
-		if errors.As(errCreatefile, &oe) {
-			log.Printf("failed to download rootfile: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			devMessage := fmt.Sprintf("failed to call service: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
-			clientMessage := "Something went wrong while downloading the rootfile"
-			err := &utils.ErrorHandler{DevMessage: devMessage, Message: clientMessage}
-			return err
-		}
-		return errDownload
-	}
-	log.Println(numByteroot)
+	defer rootCertFile.Close()
 
-	for _, message := range sqsEvent.Records {
-		fmt.Printf("Message Body queue: %s", message.Body)
-		err := json.Unmarshal([]byte(message.Body), &request)
-		if err != nil {
-			log.Fatalln(err)
-		}
+	// ca chain .pem
+	caChainCertFileName := "caChainCert"
+	caChainCertFile, errCreateCaChainCertFile := create(caChainCertFileName)
+	if errCreateCaChainCertFile != nil {
+		updateTracker(&request, &response, "FAILED", "", errCreateCaChainCertFile.Error())
+		return nil
 	}
-	log.Println(request.RequestID, "start")
-	fmt.Println(request, "request")
-	var response Response
-	body := strings.NewReader(`{
-		"status":"PROCESSING"
-	}`)
-	resp, err := httpClient.ParseClient("PUT", "https://dev-fab-api-gateway.thriwe.com/parse/classes/tracker/"+request.TrackerObjectId, body, &response)
-	if err != nil {
-		return err
+
+	defer caChainCertFile.Close()
+
+	// key .pem
+	certKeyFileName := "certKey"
+	certKeyFile, errCreateCertKeyFile := create(certKeyFileName)
+	if errCreateCertKeyFile != nil {
+		updateTracker(&request, &response, "FAILED", "", errCreateCertKeyFile.Error())
+		return nil
 	}
-	log.Println(request.RequestID, resp)
+
+	defer certKeyFile.Close()
+
+	// Downloading certificates and keys from s3
+	downloadManagerAWS := manager.NewDownloader(awsS3Client)
+
+	// root certificate
+	errDownloadRootCert := downloadFileFromS3(downloadManagerAWS, rootCertFile, AWS_S3_BUCKET, AWS_ROOT_CERT_S3_KEY)
+	if errDownloadRootCert != "" {
+		updateTracker(&request, &response, "FAILED", "", errDownloadRootCert)
+		return nil
+	}
+
+
+	// ca-chain certificate
+	errDownloadCAChainCert := downloadFileFromS3(downloadManagerAWS, caChainCertFile, AWS_S3_BUCKET, AWS_CA_CHAIN_CERT_S3_KEY)
+	if errDownloadCAChainCert != "" {
+		updateTracker(&request, &response, "FAILED", "", errDownloadCAChainCert)
+		return nil
+	}
+
+
+	// --- key .pem
+	errDownloadCertKey := downloadFileFromS3(downloadManagerAWS, certKeyFile, AWS_S3_BUCKET, AWS_ROOT_CERT_KEY_S3_KEY)
+	if errDownloadCertKey != "" {
+		updateTracker(&request, &response, "FAILED", "", errDownloadCertKey)
+		return nil
+	}
+
+
+	updateTracker(&request, &response, "PROCESSING", "", "")
+
+	// --- Profanity Check ---
+	// check, errProfanityCheck := httpClient.ProfanityCheck(request.MessageBody, request.TrackerObjectId, request.ProjectCode)
+	// if !check || errProfanityCheck != nil{
+	// 	profanityCheckFailedBody := strings.NewReader(`{
+	// 		"status": "FAILED FAB API(profanity-check failed)"
+	// 	}`)
+	// 	trackerResp, errParseTracker := httpClient.ParseClient("PUT", "https://dev-fab-api-gateway.thriwe.com/parse/classes/tracker/"+request.TrackerObjectId, profanityCheckFailedBody, &response)
+	// 	if errParseTracker != nil {
+	// 		return nil
+	// 	}
+	// 	log.Println("requestId--> ", request.RequestID, "response--> ", trackerResp)
+	// 	return nil
+	// }
 
 	if request.CommsID == "1" {
+		log.Println("starting fab mail api")
 		body := strings.NewReader(`{
 			"applicationArea": {
 				"correlationId": "FT87745646i465",
@@ -213,44 +174,21 @@ func Handler(ctx context.Context, sqsEvent events.SQSEvent) error {
 				"emailBodyContentType": "text/html"
 			}
 		}`)
-		// apiKey := os.Getenv("FAB_ONE_API_KEY")
-		// client := mandrill.ClientWithKey(apiKey)
 
-		// message := &mandrill.Message{}
-		// message.AddRecipient(request.RecipientEmail, request.RecepientName, "to")
-		// message.FromEmail = os.Getenv("FAB_ONE_FROM_EMAIL")
-		// message.FromName = os.Getenv("FAB_ONE_FROM_NAME")
-		// message.Subject = request.EmailSubject
-		// message.HTML = request.MessageBody
-
-		// _, err := client.MessagesSend(message)
-
-		resp, err := httpClient.NormalClient("POST", "https://kproxy-sit.risk-middleware-dev.mesouth1.bankfab.com/communication/v1/send/email", body, &response, certFile,interFile, caFile)
+		fabAPIResp, err := httpClient.NormalClient("POST", "https://services-test.bankfab.com/communication/v1/send/email", body, &response, rootCertFile, caChainCertFile, certKeyFile)
 		if err != nil {
-			return err
+			log.Println("fab mail api response", fabAPIResp)
+			log.Println("fab mail api err", err)
+			updateTracker(&request, &response, "FAILED FAB API(connection error)", fmt.Sprint(strings.Replace(err.Error(), "\"", "'", -1)), "")
+			return nil
 		}
-		log.Println(err)
-		log.Println(request.RequestID, resp)
-		if resp.StatusCode != 200 {
-			body := strings.NewReader(`{
-					"status":"FAILED",
-					"mailError":"` + err.Error() + `"
-				}`)
-			resp, err := httpClient.ParseClient("PUT", "https://dev-fab-api-gateway.thriwe.com/parse/classes/tracker/"+request.TrackerObjectId, body, &response)
-			if err != nil {
-				return err
-			}
-			log.Println(request.RequestID, resp)
+		if fabAPIResp.StatusCode != 200 {
+			updateTracker(&request, &response, "FAILED (FAB API status code:- ` + fmt.Sprint(fabAPIResp.StatusCode) + `)", err.Error(), "")
+			return nil
 		} else {
-			body := strings.NewReader(`{
-					"status":"SUCCESS"
-				}`)
-			resp, err := httpClient.ParseClient("PUT", "https://dev-fab-api-gateway.thriwe.com/parse/classes/tracker/"+request.TrackerObjectId, body, &response)
-			if err != nil {
-				return err
-			}
-
-			log.Println(request.RequestID, resp)
+			updateTracker(&request, &response, "SUCCESS", "", "")
+			log.Println("success, requestId--> ", request.RequestID, " response--> ", fabAPIResp)
+			return nil
 		}
 	} else if request.CommsID == "2" {
 		body := strings.NewReader(`{
@@ -275,31 +213,20 @@ func Handler(ctx context.Context, sqsEvent events.SQSEvent) error {
 				"originatorName": "FAB"
 			}
 		}`)
-		resp, err := httpClient.NormalClient("POST", "https://kproxy-sit.risk-middleware-dev.mesouth1.bankfab.com/communication/v1/send/sms", body, &response, certFile, interFile, caFile)
+		fabAPIResp, err := httpClient.NormalClient("POST", "https://services-test.bankfab.com/communication/v1/send/sms", body, &response, rootCertFile, caChainCertFile, certKeyFile)
 		if err != nil {
-			return err
+			log.Println("fab sms api response", fabAPIResp)
+			log.Println("fab sms api err", err)
+			updateTracker(&request, &response, "FAILED FAB API(connection error)", fmt.Sprint(strings.Replace(err.Error(), "\"", "'", -1)), "")
+			return nil
 		}
-		log.Println(request.RequestID, resp)
-		if resp.StatusCode != 200 {
-			body := strings.NewReader(`{
-				"status":"FAILED"
-				"mailError":"` + err.Error() + `"
-			}`)
-			resp, err := httpClient.ParseClient("PUT", "https://dev-fab-api-gateway.thriwe.com/parse/classes/tracker/"+request.TrackerObjectId, body, &response)
-			if err != nil {
-				return err
-			}
-			log.Println(request.RequestID, resp)
+		if fabAPIResp.StatusCode != 200 {
+			updateTracker(&request, &response, "FAILED (FAB API status code:- ` + fmt.Sprint(fabAPIResp.StatusCode) + `)", err.Error(), "")
+			return nil
 		} else {
-			body := strings.NewReader(`{
-				"status":"SUCCESS"
-			}`)
-			resp, err := httpClient.ParseClient("PUT", "https://dev-fab-api-gateway.thriwe.com/parse/classes/tracker/"+request.TrackerObjectId, body, &response)
-			if err != nil {
-				return err
-			}
-			log.Println(request.RequestID, resp)
-
+			updateTracker(&request, &response, "SUCCESS", "", "")
+			log.Println("success, requestId--> ", request.RequestID, " response--> ", fabAPIResp)
+			return nil
 		}
 	}
 	response.Code = "200"
@@ -310,8 +237,51 @@ func Handler(ctx context.Context, sqsEvent events.SQSEvent) error {
 }
 
 func create(p string) (*os.File, error) {
-	if err := os.MkdirAll(filepath.Dir("/tmp/"), 0770); err != nil {
-		return nil, err
+	return os.Create("/tmp/" + p)
+}
+func updateTracker(request *Request, response *Response, status, mailError, lambdaError string) {
+	body := strings.NewReader(`{
+		"status":"` + status + `"
+	}`)
+	if mailError != "" && lambdaError == "" {
+		body = strings.NewReader(`{
+			"status":"` + status + `",
+			"mailError": "` + mailError + `"
+		}`)
+	} else if lambdaError != "" && mailError == "" {
+		body = strings.NewReader(`{
+			"status":"` + status + `",
+			"lambdaError": "` + lambdaError + `"
+		}`)
+	} else if lambdaError != "" && mailError != "" {
+		body = strings.NewReader(`{
+			"status":"` + status + `",
+			"lambdaError": "` + lambdaError + `",
+			"mailError":"` + mailError + `"
+		}`)
 	}
-	return os.Create(p)
+
+	resp, errParseTracker := httpClient.ParseClient("PUT", "https://dev-fab-api-gateway.thriwe.com/parse/classes/tracker/"+request.TrackerObjectId, body, &response)
+	if errParseTracker != nil {
+		log.Println("Parse - PUT - requestId--> ", request.RequestID, "Parse - PUT - response--> ", resp, "Parse - PUT - error--> ", errParseTracker)
+	}
+}
+func downloadFileFromS3(downloadManagerAWS *manager.Downloader, file *os.File, bucket, key string) (err string) {
+	_, errDownload := downloadManagerAWS.Download(context.TODO(), file,
+		&s3.GetObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(key),
+		})
+		if errDownload != nil {
+			var devMessage string
+			var oe *smithy.OperationError
+			if errors.As(errDownload, &oe) {
+				log.Printf("failed to download rootfile: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
+				devMessage = fmt.Sprintf("failed to call service: %s, operation: %s, error: %v", oe.Service(), oe.Operation(), oe.Unwrap())
+			} else {
+				devMessage = errDownload.Error()
+			}
+			return devMessage
+		}
+	return ""
 }
