@@ -1,21 +1,20 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"ruleEngine/httpClient"
 	"strings"
 	"time"
-
-	"github.com/aws/aws-lambda-go/lambda"
+	//"github.com/labstack/echo"
+	//"github.com/aws/aws-lambda-go/lambda"
 )
 
 func main() {
-	// e := echo.New()
-	// e.POST("/test",Handler)
-	// e.Logger.Fatal(e.Start(":8000"))
-	lambda.Start(Handler)
-
+	//e := echo.New()
+	//e.POST("/test", Handler)
+	//e.Logger.Fatal(e.Start(":8000"))
+	//lambda.Start(Handler)
+	Handler()
 }
 
 type Event struct {
@@ -73,7 +72,7 @@ type Coin struct {
 	ProjectID string    `json:"projectId"`
 	UserID    string    `json:"userId"`
 	Coins     []struct {
-		Amount     float64       `json:"amount"`
+		Amount     float64   `json:"amount"`
 		ExpiryDate time.Time `json:"expiryDate"`
 	} `json:"coins"`
 	TotalCoins int `json:"totalCoins"`
@@ -90,48 +89,54 @@ type UpdateResponse []struct {
 	} `json:"success"`
 }
 
+type SubtractCoinRequest struct {
+	ProjectId           string  `json:"projectId"`
+	UserId              string  `json:"userId"`
+	IsCoinsExpireReason bool    `json:"isCoinsExpireReason"`
+	Amount              float64 `json:"amount"`
+	Reason              string  `json:"reason"`
+}
+
 func Handler() error {
 	// get all events across projectId
 	var eventResponse ParseEventResponse
 	var userResponse ParseUsers
-	var addCoin AddCoinRequest
+	//var addCoin AddCoinRequest
 	var resp UpdateResponse
 	var coin ParseCoins
 
 	// check coin expiry date
-	
-	
-	
-	_,errCoins  := httpClient.ParseClient("GET", "http://localhost:8080/parse/classes/coins", nil, &coin)
-	if errCoins!=nil{
+	body := strings.NewReader(`{}`)
+	_, errCoins := httpClient.ParseClient("GET", "http://localhost:8080/parse/classes/coins",body, &coin)
+	if errCoins != nil {
 		return errCoins
 	}
-    for i := 0; i < len(coin.Results); i++ {
-		 itr :=coin.Results[i]
-		 for j:=0; j< len(itr.Coins);j++ {
+	for i := 0; i < len(coin.Results); i++ {
+		itr := coin.Results[i]
+		for j := 0; j < len(itr.Coins); j++ {
 			// check for current date and coin exp date
-			if(itr.Coins[j].ExpiryDate.Day()==time.Now().Day() && itr.Coins[j].ExpiryDate.Month()==time.Now().Month() &&  itr.Coins[j].ExpiryDate.Year()==time.Now().Year()){
-                 coinSubtractBody:= strings.NewReader(`{
-					"projectId":`+itr.ProjectID+`,
-    				"userId":`+itr.UserID+`,
-    				"isCoinsExpireReason":`+fmt.Sprint(true)+`,
-    				"amount":`+fmt.Sprint(itr.Coins[j].Amount)+`,
-   					"reason": ""
+			if itr.Coins[j].ExpiryDate.Day() == time.Now().Day() && itr.Coins[j].ExpiryDate.Month() == time.Now().Month() && itr.Coins[j].ExpiryDate.Year() == time.Now().Year() {
+				coinSubtractBody := strings.NewReader(`{
+					"projectId":"` + itr.ProjectID + `",
+					"userId":"` + itr.UserID + `",
+					"isCoinsExpireReason":` + fmt.Sprint(true) + `,
+					"amount":` + fmt.Sprint(itr.Coins[j].Amount) + `,
+					"reason": ""
 				 }`)
-				 _,errSubtractCoins := httpClient.ParseClient("PUT","http://localhost:8080/subtractCoins",coinSubtractBody,&resp)
-				 if errSubtractCoins!=nil{
-                        return errSubtractCoins
-                 }
+				_, errSubtractCoins := httpClient.ParseClient("PUT", "http://localhost:8083/subtractCoins", coinSubtractBody, &resp)
+				if errSubtractCoins != nil {
+					return errSubtractCoins
+				}
 			}
-		 }
+		}
 	}
 
-	_, errEvent := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/events", nil, &eventResponse)
+	_, errEvent := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/events", body, &eventResponse)
 	if errEvent != nil {
 		return errEvent
 	}
 	// get coins
-	_, errUser := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/users", nil, &userResponse)
+	_, errUser := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/users", body, &userResponse)
 	if errEvent != nil {
 		return errUser
 	}
@@ -139,19 +144,17 @@ func Handler() error {
 		for j := 0; j < len(eventResponse.Results); j++ {
 			if eventResponse.Results[j].GlobalEventDetails.ID == 1 && eventResponse.Results[j].ProjectID == userResponse.Results[i].ProjectId {
 				if eventResponse.Results[j].EventDate.Day() == time.Now().Day() && eventResponse.Results[j].EventDate.Month() == time.Now().Month() {
-					addCoin.UserId = userResponse.Results[i].ObjectID
-					addCoin.ProjectId = userResponse.Results[i].ProjectId
-					addCoin.ExpiryDate = eventResponse.Results[j].CoinExpiry
-					addCoin.Coin = float64(eventResponse.Results[j].CoinAmount)
-					b, err := json.Marshal(addCoin)
-					if err!= nil {
-                        return err
-                    }
-					body := strings.NewReader(string(b))
-					_,errCoins := httpClient.ParseClient("PUT","http://localhost:8080/addCoin",body,&resp)
-					if errCoins!= nil {
-                        return errCoins
-                    }
+					date := eventResponse.Results[j].EventDate
+					body := strings.NewReader(`{
+						"projectId":"` + eventResponse.Results[j].ProjectID + `",
+                        "userId":"` + userResponse.Results[i].ObjectID + `",
+                        "coin":` + fmt.Sprint(eventResponse.Results[j].CoinAmount) + `,
+						"expiryDate":"` + date.Format("2006-01-02T15:04:05Z") + `"
+					}`)
+					_, errCoins := httpClient.ParseClient("PUT", "http://localhost:8083/addCoins", body, &resp)
+					if errCoins != nil {
+						return errCoins
+					}
 				}
 			}
 		}

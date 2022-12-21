@@ -30,10 +30,9 @@ func ParseClient(method, url string, payload *strings.Reader, v interface{}) (*h
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("X-Parse-Master-Key", "DEV_MASTER_KEY")
-	req.Header.Add("X-Parse-Application-Id", "DEV_APPLICATION_ID")
+	req.Header.Add("X-Parse-Master-Key", "MASTER_KEY")
+	req.Header.Add("X-Parse-Application-Id", "APPLICATION_ID")
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("X-Auth-Server", "1")
 
 	resp, err := http_client.Do(req)
 	if err != nil {
