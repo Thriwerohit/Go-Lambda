@@ -82,6 +82,7 @@ func Handler() error {
 	if errEvent != nil {
 		return errEvent
 	}
+	// get coins
 	_, errUser := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/users", nil, &userResponse)
 	if errEvent != nil {
 		return errUser
