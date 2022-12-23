@@ -142,6 +142,11 @@ func Handler() error {
 	}
 	for i := 0; i < len(userResponse.Results); i++ {
 		for j := 0; j < len(eventResponse.Results); j++ {
+
+			if eventResponse.Results[j].RuleExpiryDate.Before(time.Now()) || !eventResponse.Results[j].IsActive {
+				continue
+		}
+
 			if eventResponse.Results[j].GlobalEventDetails.ID == 1 && eventResponse.Results[j].ProjectID == userResponse.Results[i].ProjectId {
 				if eventResponse.Results[j].EventDate.Day() == time.Now().Day() && eventResponse.Results[j].EventDate.Month() == time.Now().Month() {
 					date := eventResponse.Results[j].EventDate
