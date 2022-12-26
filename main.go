@@ -44,14 +44,15 @@ type ParseEventResponse struct {
 	} `json:"results"`
 }
 type Users struct {
-	ObjectID     string `json:"objectId"`
-	FirstName    string `json:"firstName"`
-	LastName     string `json:"lastName"`
-	Username     string `json:"username"`
-	MobileNumber string `json:"mobileNumber"`
-	CountryCode  string `json:"countryCode"`
-	Expendature  int    `json:"expendature"`
-	ProjectId    string `json:"projectId"`
+	ObjectID     string    `json:"objectId"`
+	ProjectId    string    `json:"projectId"`
+	Username     string    `json:"username"`
+	Password     string    `json:"password"`
+	LastName     string    `json:"lastName"`
+	EmailID      string    `json:"emailId"`
+	MobileNumber string    `json:"mobileNumber"`
+	DateOfBirth  time.Time `json:"dateOfBirth"`
+	Expendature  int       `json:"expendature"`
 }
 
 type ParseUsers struct {
@@ -103,33 +104,33 @@ func Handler() error {
 	var userResponse ParseUsers
 	//var addCoin AddCoinRequest
 	var resp UpdateResponse
-	var coin ParseCoins
+	//var coin ParseCoins
 
 	// check coin expiry date
 	body := strings.NewReader(`{}`)
-	_, errCoins := httpClient.ParseClient("GET", "http://localhost:8080/parse/classes/coins",body, &coin)
-	if errCoins != nil {
-		return errCoins
-	}
-	for i := 0; i < len(coin.Results); i++ {
-		itr := coin.Results[i]
-		for j := 0; j < len(itr.Coins); j++ {
-			// check for current date and coin exp date
-			if itr.Coins[j].ExpiryDate.Day() == time.Now().Day() && itr.Coins[j].ExpiryDate.Month() == time.Now().Month() && itr.Coins[j].ExpiryDate.Year() == time.Now().Year() {
-				coinSubtractBody := strings.NewReader(`{
-					"projectId":"` + itr.ProjectID + `",
-					"userId":"` + itr.UserID + `",
-					"isCoinsExpireReason":` + fmt.Sprint(true) + `,
-					"amount":` + fmt.Sprint(itr.Coins[j].Amount) + `,
-					"reason": ""
-				 }`)
-				_, errSubtractCoins := httpClient.ParseClient("PUT", "http://localhost:8083/subtractCoins", coinSubtractBody, &resp)
-				if errSubtractCoins != nil {
-					return errSubtractCoins
-				}
-			}
-		}
-	}
+	// _, errCoins := httpClient.ParseClient("GET", "http://localhost:8080/parse/classes/coins",body, &coin)
+	// if errCoins != nil {
+	// 	return errCoins
+	// }
+	// for i := 0; i < len(coin.Results); i++ {
+	// 	itr := coin.Results[i]
+	// 	for j := 0; j < len(itr.Coins); j++ {
+	// 		// check for current date and coin exp date
+	// 		if itr.Coins[j].ExpiryDate.Day() == time.Now().Day() && itr.Coins[j].ExpiryDate.Month() == time.Now().Month() && itr.Coins[j].ExpiryDate.Year() == time.Now().Year() {
+	// 			coinSubtractBody := strings.NewReader(`{
+	// 				"projectId":"` + itr.ProjectID + `",
+	// 				"userId":"` + itr.UserID + `",
+	// 				"isCoinsExpireReason":` + fmt.Sprint(true) + `,
+	// 				"amount":` + fmt.Sprint(itr.Coins[j].Amount) + `,
+	// 				"reason": ""
+	// 			 }`)
+	// 			_, errSubtractCoins := httpClient.ParseClient("PUT", "http://localhost:8083/subtractCoins", coinSubtractBody, &resp)
+	// 			if errSubtractCoins != nil {
+	// 				return errSubtractCoins
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	_, errEvent := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/events", body, &eventResponse)
 	if errEvent != nil {
@@ -145,16 +146,32 @@ func Handler() error {
 
 			if eventResponse.Results[j].RuleExpiryDate.Before(time.Now()) || !eventResponse.Results[j].IsActive {
 				continue
-		}
+			}
 
 			if eventResponse.Results[j].GlobalEventDetails.ID == 1 && eventResponse.Results[j].ProjectID == userResponse.Results[i].ProjectId {
 				if eventResponse.Results[j].EventDate.Day() == time.Now().Day() && eventResponse.Results[j].EventDate.Month() == time.Now().Month() {
-					date := eventResponse.Results[j].EventDate
+					date := eventResponse.Results[j].CoinExpiry
 					body := strings.NewReader(`{
 						"projectId":"` + eventResponse.Results[j].ProjectID + `",
                         "userId":"` + userResponse.Results[i].ObjectID + `",
                         "coin":` + fmt.Sprint(eventResponse.Results[j].CoinAmount) + `,
-						"expiryDate":"` + date.Format("2006-01-02T15:04:05Z") + `"
+						"expiryDate":"` + date.Format("2006-01-02T15:04:05Z") + `",
+						"reason":"` + eventResponse.Results[j].GlobalEventDetails.RuleName+`"
+					}`)
+					_, errCoins := httpClient.ParseClient("PUT", "http://localhost:8083/addCoins", body, &resp)
+					if errCoins != nil {
+						return errCoins
+					}
+				}
+			} else if eventResponse.Results[j].GlobalEventDetails.ID == 2 && eventResponse.Results[j].ProjectID == userResponse.Results[i].ProjectId {
+				if userResponse.Results[i].DateOfBirth.Day() == time.Now().Day() && userResponse.Results[i].DateOfBirth.Month() == time.Now().Month() {
+					date := eventResponse.Results[j].CoinExpiry
+					body := strings.NewReader(`{
+						"projectId":"` + eventResponse.Results[j].ProjectID + `",
+                        "userId":"` + userResponse.Results[i].ObjectID + `",
+                        "coin":` + fmt.Sprint(eventResponse.Results[j].CoinAmount) + `,
+						"expiryDate":"` + date.Format("2006-01-02T15:04:05Z") + `",
+						"reason":"` + eventResponse.Results[j].GlobalEventDetails.RuleName+`"
 					}`)
 					_, errCoins := httpClient.ParseClient("PUT", "http://localhost:8083/addCoins", body, &resp)
 					if errCoins != nil {
