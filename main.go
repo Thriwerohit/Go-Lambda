@@ -104,33 +104,33 @@ func Handler() error {
 	var userResponse ParseUsers
 	//var addCoin AddCoinRequest
 	var resp UpdateResponse
-	//var coin ParseCoins
+	var coin ParseCoins
 
 	// check coin expiry date
 	body := strings.NewReader(`{}`)
-	// _, errCoins := httpClient.ParseClient("GET", "http://localhost:8080/parse/classes/coins",body, &coin)
-	// if errCoins != nil {
-	// 	return errCoins
-	// }
-	// for i := 0; i < len(coin.Results); i++ {
-	// 	itr := coin.Results[i]
-	// 	for j := 0; j < len(itr.Coins); j++ {
-	// 		// check for current date and coin exp date
-	// 		if itr.Coins[j].ExpiryDate.Day() == time.Now().Day() && itr.Coins[j].ExpiryDate.Month() == time.Now().Month() && itr.Coins[j].ExpiryDate.Year() == time.Now().Year() {
-	// 			coinSubtractBody := strings.NewReader(`{
-	// 				"projectId":"` + itr.ProjectID + `",
-	// 				"userId":"` + itr.UserID + `",
-	// 				"isCoinsExpireReason":` + fmt.Sprint(true) + `,
-	// 				"amount":` + fmt.Sprint(itr.Coins[j].Amount) + `,
-	// 				"reason": ""
-	// 			 }`)
-	// 			_, errSubtractCoins := httpClient.ParseClient("PUT", "http://localhost:8083/subtractCoins", coinSubtractBody, &resp)
-	// 			if errSubtractCoins != nil {
-	// 				return errSubtractCoins
-	// 			}
-	// 		}
-	// 	}
-	// }
+	_, errCoins := httpClient.ParseClient("GET", "http://localhost:8080/parse/classes/coins",body, &coin)
+	if errCoins != nil {
+		return errCoins
+	}
+	for i := 0; i < len(coin.Results); i++ {
+		itr := coin.Results[i]
+		for j := 0; j < len(itr.Coins); j++ {
+			// check for current date and coin exp date
+			if itr.Coins[j].ExpiryDate.Day() == time.Now().Day() && itr.Coins[j].ExpiryDate.Month() == time.Now().Month() && itr.Coins[j].ExpiryDate.Year() == time.Now().Year() {
+				coinSubtractBody := strings.NewReader(`{
+					"projectId":"` + itr.ProjectID + `",
+					"userId":"` + itr.UserID + `",
+					"isCoinsExpireReason":` + fmt.Sprint(true) + `,
+					"amount":` + fmt.Sprint(itr.Coins[j].Amount) + `,
+					"reason": ""
+				 }`)
+				_, errSubtractCoins := httpClient.ParseClient("PUT", "http://localhost:8083/subtractCoins", coinSubtractBody, &resp)
+				if errSubtractCoins != nil {
+					return errSubtractCoins
+				}
+			}
+		}
+	}
 
 	_, errEvent := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/events", body, &eventResponse)
 	if errEvent != nil {
