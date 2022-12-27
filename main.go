@@ -36,6 +36,10 @@ type Event struct {
 	EventDate      time.Time `json:"eventDate"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
+	UserDetails    []struct {
+		UserID      string    `json:"userId"`
+		DateOfBirth time.Time `json:"dateOfBirth"`
+	} `json:"userDetails"`
 }
 
 type ParseEventResponse struct {
@@ -101,7 +105,7 @@ type SubtractCoinRequest struct {
 func Handler() error {
 	// get all events across projectId
 	var eventResponse ParseEventResponse
-	var userResponse ParseUsers
+	//var userResponse ParseUsers
 	//var addCoin AddCoinRequest
 	var resp UpdateResponse
 	var coin ParseCoins
@@ -137,23 +141,26 @@ func Handler() error {
 		return errEvent
 	}
 	// get coins
-	_, errUser := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/users", body, &userResponse)
-	if errEvent != nil {
-		return errUser
-	}
-	for i := 0; i < len(userResponse.Results); i++ {
+	// _, errUser := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/users", body, &userResponse)
+	// if errEvent != nil {
+	// 	return errUser
+	// }
+	
 		for j := 0; j < len(eventResponse.Results); j++ {
 
 			if eventResponse.Results[j].RuleExpiryDate.Before(time.Now()) || !eventResponse.Results[j].IsActive {
 				continue
 			}
 
-			if eventResponse.Results[j].GlobalEventDetails.ID == 1 && eventResponse.Results[j].ProjectID == userResponse.Results[i].ProjectId {
+			if eventResponse.Results[j].GlobalEventDetails.ID == 1 {
 				if eventResponse.Results[j].EventDate.Day() == time.Now().Day() && eventResponse.Results[j].EventDate.Month() == time.Now().Month() {
+					for i := 0; i < len(eventResponse.Results[j].UserDetails); i++ {
+					userId:=eventResponse.Results[j].UserDetails[i].UserID
+					
 					date := eventResponse.Results[j].CoinExpiry
 					body := strings.NewReader(`{
 						"projectId":"` + eventResponse.Results[j].ProjectID + `",
-                        "userId":"` + userResponse.Results[i].ObjectID + `",
+                        "userId":"` + userId + `",
                         "coin":` + fmt.Sprint(eventResponse.Results[j].CoinAmount) + `,
 						"expiryDate":"` + date.Format("2006-01-02T15:04:05Z") + `",
 						"reason":"` + eventResponse.Results[j].GlobalEventDetails.RuleName+`"
@@ -163,12 +170,18 @@ func Handler() error {
 						return errCoins
 					}
 				}
-			} else if eventResponse.Results[j].GlobalEventDetails.ID == 2 && eventResponse.Results[j].ProjectID == userResponse.Results[i].ProjectId {
-				if userResponse.Results[i].DateOfBirth.Day() == time.Now().Day() && userResponse.Results[i].DateOfBirth.Month() == time.Now().Month() {
+				}
+			} else if eventResponse.Results[j].GlobalEventDetails.ID == 2  {
+				for i := 0; i < len(eventResponse.Results[j].UserDetails); i++ {
+                  
+                    dateOfBirth:=eventResponse.Results[j].UserDetails[i].DateOfBirth
+        
+				if dateOfBirth.Day() == time.Now().Day() && dateOfBirth.Month() == time.Now().Month() {
 					date := eventResponse.Results[j].CoinExpiry
+					userId:=eventResponse.Results[j].UserDetails[i].UserID
 					body := strings.NewReader(`{
 						"projectId":"` + eventResponse.Results[j].ProjectID + `",
-                        "userId":"` + userResponse.Results[i].ObjectID + `",
+                        "userId":"` + userId + `",
                         "coin":` + fmt.Sprint(eventResponse.Results[j].CoinAmount) + `,
 						"expiryDate":"` + date.Format("2006-01-02T15:04:05Z") + `",
 						"reason":"` + eventResponse.Results[j].GlobalEventDetails.RuleName+`"
@@ -180,6 +193,7 @@ func Handler() error {
 				}
 			}
 		}
-	}
-	return nil
+	
+}
+return nil
 }
