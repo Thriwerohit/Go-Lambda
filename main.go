@@ -55,7 +55,7 @@ type Users struct {
 	LastName     string    `json:"lastName"`
 	EmailID      string    `json:"emailId"`
 	MobileNumber string    `json:"mobileNumber"`
-	DateOfBirth  time.Time `json:"dateOfBirth"`
+	DateOfBirth  string `json:"dateOfBirth"`
 	Expendature  int       `json:"expendature"`
 }
 
@@ -105,14 +105,14 @@ type SubtractCoinRequest struct {
 func Handler() error {
 	// get all events across projectId
 	var eventResponse ParseEventResponse
-	//var userResponse ParseUsers
+	var userResponse ParseUsers
 	//var addCoin AddCoinRequest
 	var resp UpdateResponse
 	var coin ParseCoins
 
 	// check coin expiry date
 	body := strings.NewReader(`{}`)
-	_, errCoins := httpClient.ParseClient("GET", "http://localhost:8080/parse/classes/coins",body, &coin)
+	_, errCoins := httpClient.PostParseClient("GET", "https://dev.ext-api.thriwe.com/parse/classes/coins", body, &coin)
 	if errCoins != nil {
 		return errCoins
 	}
@@ -136,55 +136,75 @@ func Handler() error {
 		}
 	}
 
-	_, errEvent := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/events", body, &eventResponse)
+	_, errEvent := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/classes/events", body, &eventResponse)
 	if errEvent != nil {
 		return errEvent
 	}
-	// get coins
-	// _, errUser := httpClient.ParseClient("GET", "http://localhost:1337/parse/classes/users", body, &userResponse)
-	// if errEvent != nil {
-	// 	return errUser
-	// }
-	
-		for j := 0; j < len(eventResponse.Results); j++ {
 
-			if eventResponse.Results[j].RuleExpiryDate.Before(time.Now()) || !eventResponse.Results[j].IsActive {
-				continue
-			}
 
-			if eventResponse.Results[j].GlobalEventDetails.ID == 1 {
-				if eventResponse.Results[j].EventDate.Day() == time.Now().Day() && eventResponse.Results[j].EventDate.Month() == time.Now().Month() {
-					for i := 0; i < len(eventResponse.Results[j].UserDetails); i++ {
-					userId:=eventResponse.Results[j].UserDetails[i].UserID
-					
+	for j := 0; j < len(eventResponse.Results); j++ {
+
+		if eventResponse.Results[j].RuleExpiryDate.Before(time.Now()) || !eventResponse.Results[j].IsActive {
+			continue
+		}
+
+		if eventResponse.Results[j].GlobalEventDetails.ID == 1 {
+			if eventResponse.Results[j].EventDate.Day() == time.Now().Day() && eventResponse.Results[j].EventDate.Month() == time.Now().Month() {
+				
+				body := strings.NewReader(`{
+					"where":{
+						"projectId":"`+eventResponse.Results[j].ProjectID+`"
+					}
+				}`)
+				_, errUser := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/users", body, &userResponse)
+				if errUser != nil {
+					return errUser
+				}
+				for i := 0; i < len(userResponse.Results); i++ {
+					userId := userResponse.Results[i].ObjectID
+
 					date := eventResponse.Results[j].CoinExpiry
 					body := strings.NewReader(`{
 						"projectId":"` + eventResponse.Results[j].ProjectID + `",
                         "userId":"` + userId + `",
                         "coin":` + fmt.Sprint(eventResponse.Results[j].CoinAmount) + `,
 						"expiryDate":"` + date.Format("2006-01-02T15:04:05Z") + `",
-						"reason":"` + eventResponse.Results[j].GlobalEventDetails.RuleName+`"
+						"reason":"` + eventResponse.Results[j].GlobalEventDetails.RuleName + `"
 					}`)
 					_, errCoins := httpClient.ParseClient("PUT", "http://localhost:8083/addCoins", body, &resp)
 					if errCoins != nil {
 						return errCoins
 					}
 				}
+			}
+		} else if eventResponse.Results[j].GlobalEventDetails.ID == 2 {
+			body := strings.NewReader(`{
+				"where":{
+					"projectId":"`+eventResponse.Results[j].ProjectID+`"
 				}
-			} else if eventResponse.Results[j].GlobalEventDetails.ID == 2  {
-				for i := 0; i < len(eventResponse.Results[j].UserDetails); i++ {
-                  
-                    dateOfBirth:=eventResponse.Results[j].UserDetails[i].DateOfBirth
-        
+			}`)
+			_, errUser := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/users", body, &userResponse)
+			if errUser != nil {
+				return errUser
+			}
+
+			for i := 0; i < len(userResponse.Results); i++ {
+
+				dateOfBirth,errTime := time.Parse("2006-01-02",userResponse.Results[i].DateOfBirth)
+				
+				if errTime != nil{
+					return errTime
+				}
+
 				if dateOfBirth.Day() == time.Now().Day() && dateOfBirth.Month() == time.Now().Month() {
 					date := eventResponse.Results[j].CoinExpiry
-					userId:=eventResponse.Results[j].UserDetails[i].UserID
+					userId :=userResponse.Results[i].ObjectID
 					body := strings.NewReader(`{
 						"projectId":"` + eventResponse.Results[j].ProjectID + `",
                         "userId":"` + userId + `",
                         "coin":` + fmt.Sprint(eventResponse.Results[j].CoinAmount) + `,
 						"expiryDate":"` + date.Format("2006-01-02T15:04:05Z") + `",
-						"reason":"` + eventResponse.Results[j].GlobalEventDetails.RuleName+`"
+						"reason":"` + eventResponse.Results[j].GlobalEventDetails.RuleName + `"
 					}`)
 					_, errCoins := httpClient.ParseClient("PUT", "http://localhost:8083/addCoins", body, &resp)
 					if errCoins != nil {
@@ -193,7 +213,7 @@ func Handler() error {
 				}
 			}
 		}
-	
-}
-return nil
+
+	}
+	return nil
 }
