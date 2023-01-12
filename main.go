@@ -3,13 +3,13 @@ package main
 import (
 	"ruleEngine/goLambda"
 
-	"github.com/aws/aws-lambda-go/lambda"
+	//"github.com/aws/aws-lambda-go/lambda"
 )
 
 func main() {
 	// e := echo.New()
 	// e.POST("/test",Handler)
 	// e.Logger.Fatal(e.Start(":8000"))
-	lambda.Start(golambda.Handler)
+	golambda.Handler()
 
 }

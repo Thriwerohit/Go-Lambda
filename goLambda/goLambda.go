@@ -1,18 +1,14 @@
 package golambda
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"math"
 	"ruleEngine/httpClient"
+	tracker "ruleEngine/tracker"
 	"strings"
 	"time"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsConfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	aws "ruleEngine/aws"
 	"github.com/labstack/gommon/random"
 )
 
@@ -62,6 +58,23 @@ type Users struct {
 type ParseUsers struct {
 	Results []struct {
 		Users
+	} `json:"results"`
+}
+
+type Expendature struct {
+	ObjectID           string `json:"objectId"`
+	UserID             string `json:"userId"`
+	Expendature        int    `json:"expendature"`
+	MonthlyExpendature int    `json:"monthlyExpendature"`
+	WeeklyExpendature  int    `json:"weeklyExpendature"`
+	Logs               []struct {
+		Coins   int    `json:"coins"`
+		AddedAt string `json:"addedAt"`
+	} `json:"logs"`
+}
+type ParseExpedature struct {
+	Results []struct {
+		Expendature
 	} `json:"results"`
 }
 type AddCoinRequest struct {
@@ -134,6 +147,10 @@ type ParseCreate struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+func RequestIdGenerator() string {
+	return random.String(32)
+}
+
 func Handler() error {
 	// get all events across projectId
 	var eventResponse ParseEventResponse
@@ -145,6 +162,7 @@ func Handler() error {
 	body := strings.NewReader(`{}`)
 	_, errCoins := httpClient.PostParseClient("GET", "https://dev.ext-api.thriwe.com/parse/classes/coins", body, &coin)
 	if errCoins != nil {
+		log.Println("error while getting coin", errCoins)
 		return errCoins
 	}
 	for i := 0; i < len(coin.Results); i++ {
@@ -153,9 +171,9 @@ func Handler() error {
 			// check for current date and coin exp date
 			if itr.Coins[j].ExpiryDate.Day() == time.Now().Day() && itr.Coins[j].ExpiryDate.Month() == time.Now().Month() && itr.Coins[j].ExpiryDate.Year() == time.Now().Year() {
 
-				resp, errUserTracker := UserTracker(itr.UserID)
+				resp, errUserTracker := tracker.UserTracker(itr.UserID)
 				if errUserTracker != nil {
-					log.Println(errUserTracker.Error())
+					log.Println("tracker error",errUserTracker.Error())
 					return errUserTracker
 				}
 				if !resp {
@@ -163,13 +181,14 @@ func Handler() error {
 				}
 
 				reqId := RequestIdGenerator()
-				errTracker := TrackerSub(itr.ProjectID, itr.UserID, true, int(itr.Coins[j].Amount), "expire", reqId)
+				errTracker := tracker.TrackerSub(itr.ProjectID, itr.UserID, true, int(itr.Coins[j].Amount), "expire", reqId)
 				if errTracker != nil {
 					fmt.Printf("error occurred while tracking: %v", errTracker)
+					return errTracker
 				}
-				err := sendMessageForSubtract(itr.ProjectID, itr.UserID, true, int(itr.Coins[j].Amount), "expire", reqId)
+				err := aws.SendMessageForSubtract(itr.ProjectID, itr.UserID, true, int(itr.Coins[j].Amount), "expire", reqId)
 				if err != nil {
-					log.Println(err)
+					log.Println("error while sending msg",err.Error())
 					return err
 				}
 			}
@@ -178,6 +197,7 @@ func Handler() error {
 
 	_, errEvent := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/classes/events", body, &eventResponse)
 	if errEvent != nil {
+		log.Println("error on getting event response",errEvent)
 		return errEvent
 	}
 
@@ -197,6 +217,7 @@ func Handler() error {
 				}`)
 				_, errUser := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/users", body, &userResponse)
 				if errUser != nil {
+					log.Println("error while getting users in custom event",errUser.Error())
 					return errUser
 				}
 				for i := 0; i < len(userResponse.Results); i++ {
@@ -204,22 +225,23 @@ func Handler() error {
 
 					date := eventResponse.Results[j].CoinExpiry
 
-					resp, errUserTracker := UserTracker(userId)
+					resp, errUserTracker := tracker.UserTrackerCustom(userId)
 					if errUserTracker != nil {
-						log.Println(errUserTracker.Error())
+						log.Println("tracker error custom event",errUserTracker.Error())
 						return errUserTracker
 					}
 					if !resp {
 						continue
 					}
 					reqId := RequestIdGenerator()
-					errTracker := Tracker(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId)
+					errTracker := tracker.TrackerEventCoin(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, true, false)
 					if errTracker != nil {
-						fmt.Printf("error occurred while tracking: %v", errTracker)
+						fmt.Printf("error occurred while tracking custom event: %v", errTracker.Error())
+						return errTracker
 					}
-					err := sendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId)
+					err := aws.SendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, true)
 					if err != nil {
-						log.Println(err)
+						log.Println("error while sending msg in custom event",err.Error())
 						return err
 					}
 				}
@@ -233,6 +255,7 @@ func Handler() error {
 
 			_, errUser := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/users", body, &userResponse)
 			if errUser != nil {
+				log.Println("error while getting user in birthday event",errUser.Error())
 				return errUser
 			}
 
@@ -241,6 +264,7 @@ func Handler() error {
 				dateOfBirth, errTime := time.Parse("2006-01-02", userResponse.Results[i].DateOfBirth)
 
 				if errTime != nil {
+					log.Println("error in DOB",errTime.Error())
 					return errTime
 				}
 
@@ -248,20 +272,21 @@ func Handler() error {
 					date := eventResponse.Results[j].CoinExpiry
 					userId := userResponse.Results[i].ObjectID
 
-					resp, errUserTracker := UserTracker(userId)
+					resp, errUserTracker := tracker.UserTrackerBirthday(userId)
 					if errUserTracker != nil {
-						log.Println(errUserTracker.Error())
+						log.Println("error while tracking in birthday",errUserTracker.Error())
 						return errUserTracker
 					}
 					if !resp {
 						continue
 					}
 					reqId := RequestIdGenerator()
-					errTracker := Tracker(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId)
+					errTracker := tracker.TrackerEventCoin(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, false, true)
 					if errTracker != nil {
-						fmt.Printf("error occurred while tracking: %v", errTracker)
+						fmt.Printf("error occurred while tracking in birthday: %v", errTracker.Error())
+						return errTracker
 					}
-					err := sendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId)
+					err := aws.SendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, true)
 					if err != nil {
 						log.Println(err)
 						return err
@@ -271,7 +296,7 @@ func Handler() error {
 		}
 	}
 
-	if int(time.Now().Local().Weekday()) == 2 {
+	if int(time.Now().Local().Weekday()) == 4 {
 		projects, err := Projects("Weekly")
 		if err != nil {
 			return err
@@ -282,15 +307,16 @@ func Handler() error {
 		prevProjectId := ""
 		for i := 0; i < len(projects.Results); i++ {
 			if projects.Results[i].ProjectID != prevProjectId {
-				errAddCoin := AddCoin(projects.Results[i].ProjectID)
+				errAddCoin := AddCoin(projects.Results[i].ProjectID, "Weekly")
 				if errAddCoin != nil {
+					log.Println("error while adding coin",errAddCoin.Error())
 					return errAddCoin
 				}
 				prevProjectId = projects.Results[i].ProjectID
 			}
 		}
 	}
-	if int(time.Now().Local().Day()) == 1 {
+	if int(time.Now().Local().Day()) == 12 {
 		projects, err := Projects("Monthly")
 		if err != nil {
 			return err
@@ -301,8 +327,9 @@ func Handler() error {
 		prevProjectId := ""
 		for i := 0; i < len(projects.Results); i++ {
 			if projects.Results[i].ProjectID != prevProjectId {
-				errAddCoin := AddCoin(projects.Results[i].ProjectID)
+				errAddCoin := AddCoin(projects.Results[i].ProjectID, "Monthly")
 				if errAddCoin != nil {
+					log.Println("error while adding coin",errAddCoin.Error())
 					return errAddCoin
 				}
 				prevProjectId = projects.Results[i].ProjectID
@@ -322,35 +349,35 @@ func Projects(repeat string) (*ParseRules, error) {
 	}`)
 	_, errProjects := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/classes/rules", body, &rules)
 	if errProjects != nil {
+		log.Println("error in getting projects in projects",errProjects.Error())
 		return nil, errProjects
 	}
 	return &rules, nil
 }
 
-func AddCoin(projectId string) error {
+func AddCoin(projectId, expense string) error {
 	var ruleResponse ParseRules
-	var UserResponse ParseUsers
+	var UserResponse ParseExpedature
 	//var resp UpdateResponse
 	bodyRule := strings.NewReader(`{
 		"where": {
-			"projectId":"` + projectId + `"
+			"projectId":"` + projectId + `",
+			"repeatDetail.unit":"` + expense + `"
 		},
 		"order":"-expendatureAmount"
 	}`)
 	_, errProject := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/classes/rules", bodyRule, &ruleResponse)
 
 	if errProject != nil {
-		log.Println(errProject.Error())
+		log.Println("error in getting rules in add coin",errProject.Error())
 		return errProject
 	}
 	// get all user across PROJECTID
 	body := strings.NewReader(`{
-		"where":{
-			"projectId":"` + projectId + `"
-		}
 	}`)
-	_, errUser := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/users", body, &UserResponse)
+	_, errUser := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/classes/expendatureLogs", body, &UserResponse)
 	if errUser != nil {
+		log.Println("error in getting rules in add coin",errUser.Error())
 		return errUser
 	}
 
@@ -360,6 +387,12 @@ func AddCoin(projectId string) error {
 		var expiry time.Time
 		var reason string
 		var ruleId string
+		var exp int
+		if expense == "Weekly" {
+			exp = UserResponse.Results[i].WeeklyExpendature
+		} else if expense == "Monthly" {
+			exp = UserResponse.Results[i].MonthlyExpendature
+		}
 		for j := 0; j < len(ruleResponse.Results); j++ {
 			if ruleResponse.Results[j].RuleExpiryDate.Before(time.Now()) || !ruleResponse.Results[j].IsActive {
 				continue
@@ -367,13 +400,13 @@ func AddCoin(projectId string) error {
 
 			if ruleResponse.Results[j].GlobalRuleDetails.ID == 1 {
 
-				if UserResponse.Results[i].Expendature > ruleResponse.Results[0].ExpendatureAmount {
+				if exp > ruleResponse.Results[0].ExpendatureAmount {
 					coins = float64(ruleResponse.Results[0].MaxCoin)
 					expiry = ruleResponse.Results[j].CoinExpiry
 					reason = ruleResponse.Results[j].GlobalRuleDetails.RuleName
 					ruleId = ruleResponse.Results[j].ObjectID
 				} else {
-					expen := float64(UserResponse.Results[i].Expendature)
+					expen := float64(exp)
 					conversionRate := ruleResponse.Results[j].ConversionRate
 					coinsCoversion := expen * conversionRate
 					if coinsCoversion > coins {
@@ -386,7 +419,7 @@ func AddCoin(projectId string) error {
 				}
 
 			} else if ruleResponse.Results[j].GlobalRuleDetails.ID == 2 {
-				expen := float64(UserResponse.Results[i].Expendature)
+				expen := float64(exp)
 				conversionRate := ruleResponse.Results[j].ConversionRate
 				coinsFlat := expen * conversionRate
 
@@ -402,239 +435,33 @@ func AddCoin(projectId string) error {
 
 		if coins != 0.0 {
 			coins = math.Floor(coins*100) / 100
-
-			resp, errUserTracker := UserTracker(UserResponse.Results[i].ObjectID)
+			resp, errUserTracker := tracker.UserTrackerWeek(UserResponse.Results[i].UserID, expense)
 			if errUserTracker != nil {
-				log.Println(errUserTracker.Error())
+				log.Println("error in tracking in add coin",errUserTracker.Error())
 				return errUserTracker
 			}
 			if !resp {
 				continue
 			}
 			reqId := RequestIdGenerator()
-			errTracker := Tracker(int(coins), expiry, UserResponse.Results[i].ObjectID, projectId, reason, ruleId, reqId)
-			if errTracker != nil {
-				fmt.Printf("error occurred while tracking: %v", errTracker)
+			if expense == "Weekly" {
+				errTracker := tracker.TrackerRuleCoin(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId, true, false)
+				if errTracker != nil {
+					fmt.Printf("error occurred while tracking in add coin: %v", errTracker.Error())
+				}
+			} else if expense == "Monthly" {
+				errTracker := tracker.TrackerRuleCoin(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId, false, true)
+				if errTracker != nil {
+					fmt.Printf("error occurred while tracking in add coin: %v", errTracker.Error())
+				}
 			}
-			errMsg := sendMessage(int(coins), expiry, UserResponse.Results[i].ObjectID, projectId, reason, ruleId, reqId)
+			errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId, false)
 			if errMsg != nil {
-				fmt.Printf("error while sending message: %v", errMsg)
+				fmt.Printf("error while sending message in add coin: %v", errMsg.Error())
 				return errMsg
 			}
 		}
 	}
 
 	return nil
-}
-
-func sendMessage(coins int, expiry time.Time, userId string, projectId string, reason string, ruleId, reqId string) error {
-
-	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion("ap-south-1"))
-	if errLoadDefaultConfig != nil {
-		log.Fatal(errLoadDefaultConfig)
-	}
-	sqsClient := sqs.NewFromConfig(cfg)
-	sqsQueueName := "Test"
-	gQInput := &sqs.GetQueueUrlInput{
-		QueueName: &sqsQueueName,
-	}
-	result, errGetUrl := GetQueueURL(context.TODO(), sqsClient, gQInput)
-	if errGetUrl != nil {
-		fmt.Printf("error getting queue url: %v", errGetUrl)
-	}
-
-	urlRes := result.QueueUrl
-
-	fmt.Println("Got Queue URL: " + *urlRes)
-
-	queueBody := `{
-		"coin":` + fmt.Sprint(coins) + `,
-		"expiryDate":"` + expiry.Format("2006-01-02T15:04:05Z") + `",
-		"projectId":"` + projectId + `",
-		"reason":"` + reason + `",
-		"ruleId":"` + ruleId + `",
-		"userId":"` + userId + `",
-		"typeId":` + fmt.Sprint(1) + `,
-		"requestId":"` + reqId + `"
-	}`
-	sMInput := &sqs.SendMessageInput{
-		DelaySeconds: 1,
-		MessageAttributes: map[string]types.MessageAttributeValue{
-			"Title": {
-				DataType:    aws.String("String"),
-				StringValue: aws.String("Mail"),
-			},
-			"Author": {
-				DataType:    aws.String("String"),
-				StringValue: aws.String("ThriweComms library"),
-			}},
-		MessageBody: aws.String(queueBody),
-		QueueUrl:    urlRes,
-	}
-	resp, err := SendMsg(context.TODO(), sqsClient, sMInput)
-	if err != nil {
-		fmt.Printf("Got an error while trying to send message to queue: %v", err)
-		return err
-	}
-	fmt.Println("queue response", resp)
-	return nil
-}
-
-type SQSSendMessageAPI interface {
-	GetQueueUrl(ctx context.Context,
-		params *sqs.GetQueueUrlInput,
-		optFns ...func(*sqs.Options)) (*sqs.GetQueueUrlOutput, error)
-
-	SendMessage(ctx context.Context,
-		params *sqs.SendMessageInput,
-		optFns ...func(*sqs.Options)) (*sqs.SendMessageOutput, error)
-}
-
-func GetQueueURL(c context.Context, api SQSSendMessageAPI, input *sqs.GetQueueUrlInput) (*sqs.GetQueueUrlOutput, error) {
-	return api.GetQueueUrl(c, input)
-}
-
-func SendMsg(c context.Context, api SQSSendMessageAPI, input *sqs.SendMessageInput) (*sqs.SendMessageOutput, error) {
-	return api.SendMessage(c, input)
-}
-
-func sendMessageForSubtract(projectId string, userId string, isexpire bool, amount int, reason, reqId string) error {
-	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion("ap-south-1"))
-	if errLoadDefaultConfig != nil {
-		log.Fatal(errLoadDefaultConfig)
-	}
-	sqsClient := sqs.NewFromConfig(cfg)
-	sqsQueueName := "Test"
-	gQInput := &sqs.GetQueueUrlInput{
-		QueueName: &sqsQueueName,
-	}
-	result, errGetUrl := GetQueueURL(context.TODO(), sqsClient, gQInput)
-	if errGetUrl != nil {
-		fmt.Printf("error getting queue url: %v", errGetUrl)
-	}
-
-	urlRes := result.QueueUrl
-
-	fmt.Println("Got Queue URL: " + *urlRes)
-
-	queueBody := `{
-		"projectId":"` + projectId + `",
-		"amount":` + fmt.Sprint(amount) + `,
-		"userId":"` + userId + `",
-		"isCoinsExpireReason":` + fmt.Sprint(isexpire) + `,
-		"reason":"` + reason + `",
-		"typeId":` + fmt.Sprint(2) + `
-
-	}`
-	sMInput := &sqs.SendMessageInput{
-		DelaySeconds: 1,
-		MessageAttributes: map[string]types.MessageAttributeValue{
-			"Title": {
-				DataType:    aws.String("String"),
-				StringValue: aws.String("Mail"),
-			},
-			"Author": {
-				DataType:    aws.String("String"),
-				StringValue: aws.String("ThriweComms library"),
-			}},
-		MessageBody: aws.String(queueBody),
-		QueueUrl:    urlRes,
-	}
-	resp, err := SendMsg(context.TODO(), sqsClient, sMInput)
-	if err != nil {
-		fmt.Printf("Got an error while trying to send message to queue: %v", err)
-		return err
-	}
-	fmt.Println("queue response", resp)
-	return nil
-}
-
-func RequestIdGenerator() string {
-	return random.String(32)
-}
-
-func Tracker(coin int, expiry time.Time, userId, projectId, reason, rulId, reqId string) error {
-	var resp ParseCreate
-	body := strings.NewReader(`{
-		"requestId":"` + reqId + `",
-		"userId":"` + userId + `",
-		"projectId":"` + projectId + `",
-		"reason":"` + reason + `",
-		"coin":` + fmt.Sprint(coin) + `,
-		"expiryDate":"` + expiry.Format("2006-01-02T15:04:05Z") + `",
-		"status": "initiated",
-		"ruleId": "` + rulId + `",
-		"typeId": ` + fmt.Sprint(1) + `,
-		"trackerCreatedAt":"` + time.Now().Local().Format("2006-01-02") + `"
-	}`)
-	_, err := httpClient.ParseClient("POST", "https://dev-fab-api-gateway.thriwe.com/parse/classes/trackerCoin", body, &resp)
-	if err != nil {
-		fmt.Print("error while creating tracker", reqId)
-		return err
-	}
-	return nil
-}
-
-func TrackerSub(projectId string, userId string, isExpire bool, coin int, reason, reqId string) error {
-	var resp ParseCreate
-
-	body := strings.NewReader(`{
-		"requestId":"` + reqId + `",
-		"userId":"` + userId + `",
-		"projectId":"` + projectId + `",
-		"reason":"` + reason + `",
-		"coin":` + fmt.Sprint(coin) + `,
-		"isCoinsExpireReason":` + fmt.Sprint(isExpire) + `,
-		"typeId":` + fmt.Sprint(2) + `,
-		"status": "initiated",
-		"trackerCreatedAt":"` + time.Now().Local().Format("2006-01-02") + `"
-	}`)
-	_, err := httpClient.ParseClient("POST", "https://dev-fab-api-gateway.thriwe.com/parse/classes/trackerCoin", body, &resp)
-	if err != nil {
-		fmt.Print("error while creating tracker", reqId)
-		return err
-	}
-	return nil
-}
-
-type RequestTracker struct {
-	ProjectId           string    `json:"projectId"`
-	UserId              string    `json:"userId"`
-	IsCoinsExpireReason bool      `json:"isCoinsExpireReason"`
-	Amount              float64   `json:"amount"`
-	ObjectID            string    `json:"objectId"`
-	Coin                int       `json:"coin"`
-	ExpirtDate          time.Time `json:"expirtDate"`
-	RuleID              string    `json:"ruleId"`
-	Reason              string    `json:"reason"`
-	RequestID           string    `json:"requestId"`
-	TrackerCreatedAt    string    `json:"trackerCreatedAt"`
-	Status              string    `json:"status"`
-	TypeId              int       `json:"typeId"`
-}
-
-type ParseTracker struct {
-	Results []struct {
-		RequestTracker
-	} `json:"results"`
-}
-
-func UserTracker(userId string) (bool, error) {
-	var tracker ParseTracker
-	bodyTracker := strings.NewReader(`{
-		"where":{
-			"userId":"` + userId + `",
-			"trackerCreatedAt":"` + time.Now().Local().Format("2006-01-02") + `"
-		}
-	}`)
-	_, errTracker := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/classes/trackerCoin", bodyTracker, &tracker)
-	if errTracker != nil {
-		return false, errTracker
-	}
-	if len(tracker.Results) == 0 {
-		return true, nil
-	} else {
-		return false, nil
-	}
-
 }
