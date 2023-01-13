@@ -1,15 +1,12 @@
 package main
 
 import (
-	"ruleEngine/goLambda"
+	golambda "ruleEngine/goLambda"
 
-	//"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-lambda-go/lambda"
 )
 
 func main() {
-	// e := echo.New()
-	// e.POST("/test",Handler)
-	// e.Logger.Fatal(e.Start(":8000"))
-	golambda.Handler()
-
+lambda.Start(golambda.Handler)
+//golambda.Handler()
 }

@@ -34,14 +34,14 @@ func RequestIdGenerator() string {
 	return random.String(32)
 }
 
-func SendMessage(coins int, expiry time.Time, userId string, projectId string, reason string, ruleId, reqId string, isevent bool) error {
+func SendMessage(coins int, expiry time.Time, userId string, projectId string, reason string, ruleId, reqId string) error {
 
-	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion("ap-south-1"))
+	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion("me-central-1"))
 	if errLoadDefaultConfig != nil {
 		log.Fatal(errLoadDefaultConfig)
 	}
 	sqsClient := sqs.NewFromConfig(cfg)
-	sqsQueueName := "Test"
+	sqsQueueName := "dev-test-queue-1"
 	gQInput := &sqs.GetQueueUrlInput{
 		QueueName: &sqsQueueName,
 	}
@@ -63,8 +63,7 @@ func SendMessage(coins int, expiry time.Time, userId string, projectId string, r
 		"ruleId":"` + ruleId + `",
 		"userId":"` + userId + `",
 		"typeId":` + fmt.Sprint(1) + `,
-		"requestId":"` + reqId + `",
-		"isEvent":` + fmt.Sprint(isevent) + `
+		"requestId":"` + reqId + `"
 	}`
 	sMInput := &sqs.SendMessageInput{
 		DelaySeconds: 1,
@@ -90,12 +89,12 @@ func SendMessage(coins int, expiry time.Time, userId string, projectId string, r
 }
 
 func SendMessageForSubtract(projectId string, userId string, isexpire bool, amount int, reason, reqId string) error {
-	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion("ap-south-1"))
+	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion("me-central-1"))
 	if errLoadDefaultConfig != nil {
 		log.Fatal(errLoadDefaultConfig)
 	}
 	sqsClient := sqs.NewFromConfig(cfg)
-	sqsQueueName := "Test"
+	sqsQueueName := "dev-test-queue-1"
 	gQInput := &sqs.GetQueueUrlInput{
 		QueueName: &sqsQueueName,
 	}
