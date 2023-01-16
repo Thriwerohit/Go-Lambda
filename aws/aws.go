@@ -34,7 +34,7 @@ func RequestIdGenerator() string {
 	return random.String(32)
 }
 
-func SendMessage(coins int, expiry time.Time, userId string, projectId string, reason string, ruleId, reqId string) error {
+func SendMessage(coins int, expiry time.Time, userId string, projectId string, reason string, ruleId, reqId string,id int) error {
 
 	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion("me-central-1"))
 	if errLoadDefaultConfig != nil {
@@ -63,7 +63,8 @@ func SendMessage(coins int, expiry time.Time, userId string, projectId string, r
 		"ruleId":"` + ruleId + `",
 		"userId":"` + userId + `",
 		"typeId":` + fmt.Sprint(1) + `,
-		"requestId":"` + reqId + `"
+		"requestId":"` + reqId + `",
+		"eventId":` + fmt.Sprint(id)+`
 	}`
 	sMInput := &sqs.SendMessageInput{
 		DelaySeconds: 1,
@@ -88,7 +89,7 @@ func SendMessage(coins int, expiry time.Time, userId string, projectId string, r
 	return nil
 }
 
-func SendMessageForSubtract(projectId string, userId string, isexpire bool, amount int, reason, reqId string) error {
+func SendMessageForSubtract(projectId string, userId string, isexpire bool, amount int, reason, reqId string,id int) error {
 	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion("me-central-1"))
 	if errLoadDefaultConfig != nil {
 		log.Fatal(errLoadDefaultConfig)
@@ -115,8 +116,8 @@ func SendMessageForSubtract(projectId string, userId string, isexpire bool, amou
 		"isCoinsExpireReason":` + fmt.Sprint(isexpire) + `,
 		"reason":"` + reason + `",
 		"typeId":` + fmt.Sprint(2) + `,
-		"requestId":"`+reqId+`"
-
+		"requestId":"`+reqId+`",
+		"eventId":` + fmt.Sprint(id)+`
 	}`
 	sMInput := &sqs.SendMessageInput{
 		DelaySeconds: 1,

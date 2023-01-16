@@ -187,7 +187,7 @@ func Handler() error {
 					fmt.Printf("error occurred while tracking: %v", errTracker)
 					return errTracker
 				}
-				err := aws.SendMessageForSubtract(itr.ProjectID, itr.UserID, true, int(itr.Coins[j].Amount), "expire", reqId)
+				err := aws.SendMessageForSubtract(itr.ProjectID, itr.UserID, true, int(itr.Coins[j].Amount), "expire", reqId,1)
 				if err != nil {
 					log.Println("error while sending msg", err.Error())
 					return err
@@ -240,7 +240,7 @@ func Handler() error {
 						fmt.Printf("error occurred while tracking custom event: %v", errTracker.Error())
 						return errTracker
 					}
-					err := aws.SendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId)
+					err := aws.SendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId,2)
 					if err != nil {
 						log.Println("error while sending msg in custom event", err.Error())
 						return err
@@ -287,7 +287,7 @@ func Handler() error {
 						fmt.Printf("error occurred while tracking in birthday: %v", errTracker.Error())
 						return errTracker
 					}
-					err := aws.SendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId)
+					err := aws.SendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId,3)
 					if err != nil {
 						log.Println(err)
 						return err
@@ -429,7 +429,7 @@ func AddCoin(projectId, expense string) error {
 					fmt.Printf("error occurred while tracking in add coin: %v", errTracker.Error())
 				}
 
-				errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId)
+				errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId,4)
 				if errMsg != nil {
 					fmt.Printf("error while sending message in add coin: %v", errMsg.Error())
 					return errMsg
@@ -452,7 +452,7 @@ func AddCoin(projectId, expense string) error {
 					fmt.Printf("error occurred while tracking in add coin: %v", errTracker.Error())
 				}
 
-				errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId)
+				errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId,5)
 				if errMsg != nil {
 					fmt.Printf("error while sending message in add coin: %v", errMsg.Error())
 					return errMsg
