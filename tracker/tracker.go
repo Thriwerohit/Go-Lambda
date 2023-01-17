@@ -2,7 +2,7 @@ package tracker
 
 import (
 	"fmt"
-	"ruleEngine/httpClient"
+	httpClient "ruleEngine/httpClient"
 	"strings"
 	"time"
 )
@@ -12,7 +12,7 @@ type ParseCreate struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-func TrackerAddCoin(coin int, expiry time.Time, userId, projectId, reason, rulId, reqId string,id int) error {
+func TrackerAddCoin(coin int, expiry time.Time, userId, projectId, reason, rulId, reqId string, id int) error {
 	var resp ParseCreate
 	body := strings.NewReader(`{
 		"requestId":"` + reqId + `",
@@ -25,10 +25,10 @@ func TrackerAddCoin(coin int, expiry time.Time, userId, projectId, reason, rulId
 		"ruleId": "` + rulId + `",
 		"typeId": ` + fmt.Sprint(1) + `,
 		"trackerCreatedAt":"` + time.Now().Local().Format("2006-01-02") + `",
-		"eventId":`+fmt.Sprint(id)+`
+		"eventId":` + fmt.Sprint(id) + `
 	}`)
 
-	_, err := httpClient.ParseClient("POST", "https://dev-fab-api-gateway.thriwe.com/parse/classes/trackerCoin", body, &resp)
+	_, err := httpClient.ParseClient("POST", "classes/trackerCoin", body, &resp)
 	if err != nil {
 		fmt.Print("error while creating tracker", reqId)
 		return err
@@ -61,7 +61,7 @@ func TrackerAddCoin(coin int, expiry time.Time, userId, projectId, reason, rulId
 // 	return nil
 // }
 
-func TrackerSub(projectId string, userId string, isExpire bool, coin int, reason, reqId string,id int) error {
+func TrackerSub(projectId string, userId string, isExpire bool, coin int, reason, reqId string, id int) error {
 	var resp ParseCreate
 
 	body := strings.NewReader(`{
@@ -74,9 +74,9 @@ func TrackerSub(projectId string, userId string, isExpire bool, coin int, reason
 		"typeId":` + fmt.Sprint(2) + `,
 		"status": "initiated",
 		"trackerCreatedAt":"` + time.Now().Local().Format("2006-01-02") + `",
-		"eventId":`+fmt.Sprint(id)+`
+		"eventId":` + fmt.Sprint(id) + `
 	}`)
-	_, err := httpClient.ParseClient("POST", "https://dev-fab-api-gateway.thriwe.com/parse/classes/trackerCoin", body, &resp)
+	_, err := httpClient.ParseClient("POST", "classes/trackerCoin", body, &resp)
 	if err != nil {
 		fmt.Print("error while creating tracker", reqId)
 		return err
@@ -140,13 +140,13 @@ type ParseTracker struct {
 // 	}
 
 // }
-func UserTracker(userId string,id int) (bool, error) {
+func UserTracker(userId string, id int) (bool, error) {
 	var tracker ParseTracker
 	bodyTracker := strings.NewReader(`{
 		"where":{
 			"userId":"` + userId + `",
 			"trackerCreatedAt":"` + time.Now().Local().Format("2006-01-02") + `",
-			"eventId":`+fmt.Sprint(id)+`
+			"eventId":` + fmt.Sprint(id) + `
 		}
 	}`)
 	_, errTracker := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/classes/trackerCoin", bodyTracker, &tracker)
@@ -160,6 +160,7 @@ func UserTracker(userId string,id int) (bool, error) {
 	}
 
 }
+
 // func UserTrackerCustom(userId string) (bool, error) {
 // 	var tracker ParseTracker
 // 	bodyTracker := strings.NewReader(`{

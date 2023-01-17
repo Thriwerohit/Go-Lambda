@@ -6,14 +6,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	config "ruleEngine/config"
 	"strings"
 	"time"
 )
 
-func ParseClient(method, url string, payload *strings.Reader, v interface{}) (*http.Response, error) {
+func ParseClient(method, path string, payload *strings.Reader, v interface{}) (*http.Response, error) {
+	c := config.Init()
 	var netTransport = &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout: 5 * time.Second,
@@ -26,14 +30,20 @@ func ParseClient(method, url string, payload *strings.Reader, v interface{}) (*h
 		Timeout:   time.Second * 10,
 		Transport: netTransport,
 	}
-	req, err := http.NewRequest(method, url, payload)
+	rel := &url.URL{Path: path}
+	baseUrl, err := url.Parse(c.GetString("FAB_BENEFITS_V1.base_url"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	u := baseUrl.ResolveReference(rel)
+	req, err := http.NewRequest(method, u.String(), payload)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("X-Parse-Master-Key", "DEV_MASTER_KEY")
-	req.Header.Add("X-Parse-Application-Id", "DEV_APPLICATION_ID")
+	req.Header.Add("X-Parse-Master-Key", c.GetString("FAB_BENEFITS_V1.master_key"))
+	req.Header.Add("X-Parse-Application-Id", c.GetString("FAB_BENEFITS_V1.application_id"))
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("X-Api-Key","thriwe")
 
 	resp, err := http_client.Do(req)
 	if err != nil {
@@ -63,7 +73,8 @@ func ParseClient(method, url string, payload *strings.Reader, v interface{}) (*h
 	return resp, err
 }
 
-func PostParseClient(method, url string, payload *strings.Reader, v interface{}) (*http.Response, error) {
+func PostParseClient(method, path string, body *strings.Reader, v interface{}) (*http.Response, error) {
+	c:= config.Init()
 	var netTransport = &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout: 5 * time.Second,
@@ -76,14 +87,28 @@ func PostParseClient(method, url string, payload *strings.Reader, v interface{})
 		Timeout:   time.Second * 10,
 		Transport: netTransport,
 	}
-	req, err := http.NewRequest(method, url, payload)
+	rel := &url.URL{Path: path}
+
+	baseUrl, err := url.Parse(c.GetString("postgresql_parse_server.base_url"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	u := baseUrl.ResolveReference(rel)
+	req, err := http.NewRequest(method, u.String(), body)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("X-Parse-Master-Key", "MASTER_KEY")
-	req.Header.Add("X-Parse-Application-Id", "APPLICATION_ID")
+
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.Header.Add("X-Parse-Application-Id", c.GetString("postgresql_parse_server.application_id"))
+	req.Header.Add("X-Parse-Master-Key", c.GetString("postgresql_parse_server.master_key"))
+	req.Header.Add("X-Transactions-Server", c.GetString("postgresql_parse_server.Transactions-Server"))
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("X-Transactions-Server","1")
+	req.Header.Add("Accept", "*/*")
+	req.Header.Add("Accept-Encoding", "gzip, deflate, br")
 
 	resp, err := http_client.Do(req)
 	if err != nil {

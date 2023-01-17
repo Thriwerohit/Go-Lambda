@@ -161,7 +161,7 @@ func Handler() error {
 
 	// check coin expiry date
 	body := strings.NewReader(`{}`)
-	_, errCoins := httpClient.PostParseClient("GET", "https://dev.ext-api.thriwe.com/parse/classes/coins", body, &coin)
+	_, errCoins := httpClient.PostParseClient("GET", "classes/coins", body, &coin)
 	if errCoins != nil {
 		log.Println("error while getting coin", errCoins)
 		return errCoins
@@ -196,7 +196,7 @@ func Handler() error {
 		}
 	}
 
-	_, errEvent := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/classes/events", body, &eventResponse)
+	_, errEvent := httpClient.ParseClient("GET", "classes/events", body, &eventResponse)
 	if errEvent != nil {
 		log.Println("error on getting event response", errEvent)
 		return errEvent
@@ -216,7 +216,7 @@ func Handler() error {
 						"projectId":"` + eventResponse.Results[j].ProjectID + `"
 					}
 				}`)
-				_, errUser := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/users", body, &userResponse)
+				_, errUser := httpClient.ParseClient("GET", "users", body, &userResponse)
 				if errUser != nil {
 					log.Println("error while getting users in custom event", errUser.Error())
 					return errUser
@@ -254,7 +254,7 @@ func Handler() error {
 				}
 			}`)
 
-			_, errUser := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/users", body, &userResponse)
+			_, errUser := httpClient.ParseClient("GET", "users", body, &userResponse)
 			if errUser != nil {
 				log.Println("error while getting user in birthday event", errUser.Error())
 				return errUser
@@ -341,7 +341,7 @@ func AddCoin(projectId, expense string) error {
 		},
 		"order":"-expendatureAmount"
 	}`)
-	_, errProject := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/classes/rules", bodyRule, &ruleResponse)
+	_, errProject := httpClient.ParseClient("GET", "classes/rules", bodyRule, &ruleResponse)
 
 	if errProject != nil {
 		log.Println("error in getting rules in add coin", errProject.Error())
@@ -350,7 +350,7 @@ func AddCoin(projectId, expense string) error {
 	// get all user across PROJECTID
 	body := strings.NewReader(`{
 	}`)
-	_, errUser := httpClient.ParseClient("GET", "https://dev-fab-api-gateway.thriwe.com/parse/classes/expendatureLogs", body, &UserResponse)
+	_, errUser := httpClient.ParseClient("GET", "classes/expendatureLogs", body, &UserResponse)
 	if errUser != nil {
 		log.Println("error in getting rules in add coin", errUser.Error())
 		return errUser

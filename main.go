@@ -3,10 +3,10 @@ package main
 import (
 	golambda "ruleEngine/goLambda"
 
-	"github.com/aws/aws-lambda-go/lambda"
+	//"github.com/aws/aws-lambda-go/lambda"
 )
 
 func main() {
-lambda.Start(golambda.Handler)
-//golambda.Handler()
+//lambda.Start(golambda.Handler)
+golambda.Handler()
 }

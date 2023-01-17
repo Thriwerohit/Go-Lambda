@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"ruleEngine/config"
 	"time"
+
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
@@ -35,13 +37,13 @@ func RequestIdGenerator() string {
 }
 
 func SendMessage(coins int, expiry time.Time, userId string, projectId string, reason string, ruleId, reqId string,id int) error {
-
-	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion("me-central-1"))
+	c:= config.Init()
+	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(c.GetString("sqs.region")))
 	if errLoadDefaultConfig != nil {
 		log.Fatal(errLoadDefaultConfig)
 	}
 	sqsClient := sqs.NewFromConfig(cfg)
-	sqsQueueName := "dev-test-queue-1"
+	sqsQueueName := c.GetString("sqs.name")
 	gQInput := &sqs.GetQueueUrlInput{
 		QueueName: &sqsQueueName,
 	}
@@ -90,12 +92,13 @@ func SendMessage(coins int, expiry time.Time, userId string, projectId string, r
 }
 
 func SendMessageForSubtract(projectId string, userId string, isexpire bool, amount int, reason, reqId string,id int) error {
-	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion("me-central-1"))
+	c := config.Init()
+	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(c.GetString("sqs.region")))
 	if errLoadDefaultConfig != nil {
 		log.Fatal(errLoadDefaultConfig)
 	}
 	sqsClient := sqs.NewFromConfig(cfg)
-	sqsQueueName := "dev-test-queue-1"
+	sqsQueueName := c.GetString("sqs.name")
 	gQInput := &sqs.GetQueueUrlInput{
 		QueueName: &sqsQueueName,
 	}
