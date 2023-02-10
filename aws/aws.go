@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"ruleEngine/config"
+	"os"
 	"time"
 
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
@@ -36,14 +36,13 @@ func RequestIdGenerator() string {
 	return random.String(32)
 }
 
-func SendMessage(coins int, expiry time.Time, userId string, projectId string, reason string, ruleId, reqId string,id int) error {
-	c:= config.Init()
-	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(c.GetString("sqs.region")))
+func SendMessage(coins int, expiry time.Time, userId string, projectId string, reason string, ruleId, reqId string, id int) error {
+	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(os.Getenv("region")))
 	if errLoadDefaultConfig != nil {
 		log.Fatal(errLoadDefaultConfig)
 	}
 	sqsClient := sqs.NewFromConfig(cfg)
-	sqsQueueName := c.GetString("sqs.name")
+	sqsQueueName := os.Getenv("queueName")
 	gQInput := &sqs.GetQueueUrlInput{
 		QueueName: &sqsQueueName,
 	}
@@ -66,7 +65,7 @@ func SendMessage(coins int, expiry time.Time, userId string, projectId string, r
 		"userId":"` + userId + `",
 		"typeId":` + fmt.Sprint(1) + `,
 		"requestId":"` + reqId + `",
-		"eventId":` + fmt.Sprint(id)+`
+		"eventId":` + fmt.Sprint(id) + `
 	}`
 	sMInput := &sqs.SendMessageInput{
 		DelaySeconds: 1,
@@ -91,14 +90,13 @@ func SendMessage(coins int, expiry time.Time, userId string, projectId string, r
 	return nil
 }
 
-func SendMessageForSubtract(projectId string, userId string, isexpire bool, amount int, reason, reqId string,id int) error {
-	c := config.Init()
-	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(c.GetString("sqs.region")))
+func SendMessageForSubtract(projectId string, userId string, isexpire bool, amount int, reason, reqId string, id int) error {
+	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(os.Getenv("region")))
 	if errLoadDefaultConfig != nil {
 		log.Fatal(errLoadDefaultConfig)
 	}
 	sqsClient := sqs.NewFromConfig(cfg)
-	sqsQueueName := c.GetString("sqs.name")
+	sqsQueueName := os.Getenv("queueName")
 	gQInput := &sqs.GetQueueUrlInput{
 		QueueName: &sqsQueueName,
 	}
@@ -119,8 +117,8 @@ func SendMessageForSubtract(projectId string, userId string, isexpire bool, amou
 		"isCoinsExpireReason":` + fmt.Sprint(isexpire) + `,
 		"reason":"` + reason + `",
 		"typeId":` + fmt.Sprint(2) + `,
-		"requestId":"`+reqId+`",
-		"eventId":` + fmt.Sprint(id)+`
+		"requestId":"` + reqId + `",
+		"eventId":` + fmt.Sprint(id) + `
 	}`
 	sMInput := &sqs.SendMessageInput{
 		DelaySeconds: 1,
