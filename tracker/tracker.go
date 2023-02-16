@@ -12,12 +12,11 @@ type ParseCreate struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-func TrackerAddCoin(coin int, expiry time.Time, userId, projectId, reason, rulId, reqId string, id int) error {
+func TrackerAddCoin(coin int, expiry time.Time, userId,reason, rulId, reqId string, id int) error {
 	var resp ParseCreate
 	body := strings.NewReader(`{
 		"requestId":"` + reqId + `",
 		"userId":"` + userId + `",
-		"projectId":"` + projectId + `",
 		"reason":"` + reason + `",
 		"coin":` + fmt.Sprint(coin) + `,
 		"expiryDate":"` + expiry.Format("2006-01-02T15:04:05Z") + `",

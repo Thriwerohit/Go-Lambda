@@ -53,7 +53,6 @@ type Users struct {
 	EmailID      string `json:"emailId"`
 	MobileNumber string `json:"mobileNumber"`
 	DateOfBirth  string `json:"dateOfBirth"`
-	Expendature  int    `json:"expendature"`
 }
 
 type ParseUsers struct {
@@ -133,7 +132,7 @@ type ExpenditureRule struct {
 	CoinExpiry        time.Time `json:"coinExpiry"`
 	IsActive          bool      `json:"isActive"`
 	RuleExpiryDate    time.Time `json:"ruleExpiryDate"`
-	MaxCoin           int       `json:"MaxCoin"`
+	MaxCoin           int       `json:"maxCoin"`
 	ExpenditureAmount int       `json:"expenditureAmount"`
 	ConversionRate    float64   `json:"conversionRate"`
 }
@@ -207,15 +206,11 @@ func Handler() error {
 		if eventResponse.Results[j].RuleExpiryDate.Before(time.Now()) || !eventResponse.Results[j].IsActive {
 			continue
 		}
-
+		//custom event
 		if eventResponse.Results[j].GlobalEventDetails.ID == 1 {
 			if eventResponse.Results[j].EventDate.Day() == time.Now().Day() && eventResponse.Results[j].EventDate.Month() == time.Now().Month() {
 
-				body := strings.NewReader(`{
-					"where":{
-						"projectId":"` + eventResponse.Results[j].ProjectID + `"
-					}
-				}`)
+				body := strings.NewReader(`{}`)
 				_, errUser := httpClient.ParseClient("GET", "users", body, &userResponse)
 				if errUser != nil {
 					log.Println("error while getting users in custom event", errUser.Error())
@@ -235,24 +230,20 @@ func Handler() error {
 						continue
 					}
 					reqId := RequestIdGenerator()
-					errTracker := tracker.TrackerAddCoin(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, 2)
+					errTracker := tracker.TrackerAddCoin(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, 2)
 					if errTracker != nil {
 						fmt.Printf("error occurred while tracking custom event: %v", errTracker.Error())
 						return errTracker
 					}
-					err := aws.SendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, 2)
+					err := aws.SendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, 2)
 					if err != nil {
 						log.Println("error while sending msg in custom event", err.Error())
 						return err
 					}
 				}
-			}
+			}//birthday event
 		} else if eventResponse.Results[j].GlobalEventDetails.ID == 2 {
-			body := strings.NewReader(`{
-				"where":{
-					"projectId":"` + eventResponse.Results[j].ProjectID + `"
-				}
-			}`)
+			body := strings.NewReader(`{}`)
 
 			_, errUser := httpClient.ParseClient("GET", "users", body, &userResponse)
 			if errUser != nil {
@@ -282,12 +273,12 @@ func Handler() error {
 						continue
 					}
 					reqId := RequestIdGenerator()
-					errTracker := tracker.TrackerAddCoin(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, 3)
+					errTracker := tracker.TrackerAddCoin(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, 3)
 					if errTracker != nil {
 						fmt.Printf("error occurred while tracking in birthday: %v", errTracker.Error())
 						return errTracker
 					}
-					err := aws.SendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].ProjectID, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, 3)
+					err := aws.SendMessage(int(eventResponse.Results[j].CoinAmount), date, userId, eventResponse.Results[j].GlobalEventDetails.RuleName, eventResponse.Results[j].ObjectID, reqId, 3)
 					if err != nil {
 						log.Println(err)
 						return err
@@ -298,14 +289,14 @@ func Handler() error {
 	}
 
 	if int(time.Now().Local().Weekday()) == 5 {
-		errAddCoin := AddCoin("XlsTfS4VXW", "Weekly")
+		errAddCoin := AddCoin("Weekly")
 		if errAddCoin != nil {
 			log.Println("error while adding coin", errAddCoin.Error())
 			return errAddCoin
 		}
-		if int(time.Now().Local().Day()) == 17 {
+		if int(time.Now().Local().Day()) == 16 {
 
-			errAddCoin := AddCoin("XlsTfS4VXW", "Monthly")
+			errAddCoin := AddCoin("Monthly")
 			if errAddCoin != nil {
 				log.Println("error while adding coin", errAddCoin.Error())
 				return errAddCoin
@@ -316,7 +307,7 @@ func Handler() error {
 	return nil
 }
 
-func AddCoin(projectId, expense string) error {
+func AddCoin(expense string) error {
 	var ruleResponse ParseRules
 	var UserResponse ParseExpedature
 	//var resp UpdateResponse
@@ -326,15 +317,14 @@ func AddCoin(projectId, expense string) error {
 		},
 		"order":"-expendatureAmount"
 	}`)
-	_, errProject := httpClient.ParseClient("GET", "classes/rules", bodyRule, &ruleResponse)
+	_, errRule := httpClient.ParseClient("GET", "classes/rules", bodyRule, &ruleResponse)
 
-	if errProject != nil {
-		log.Println("error in getting rules in add coin", errProject.Error())
-		return errProject
+	if errRule != nil {
+		log.Println("error in getting rules in add coin", errRule.Error())
+		return errRule
 	}
 	// get all user across PROJECTID
-	body := strings.NewReader(`{
-	}`)
+	body := strings.NewReader(`{}`)
 	_, errUser := httpClient.ParseClient("GET", "classes/expendatureLogs", body, &UserResponse)
 	if errUser != nil {
 		log.Println("error in getting rules in add coin", errUser.Error())
@@ -357,7 +347,7 @@ func AddCoin(projectId, expense string) error {
 			if ruleResponse.Results[j].RuleExpiryDate.Before(time.Now()) || !ruleResponse.Results[j].IsActive {
 				continue
 			}
-
+			//conversion rule
 			if ruleResponse.Results[j].GlobalRuleDetails.ID == 1 {
 
 				if exp > ruleResponse.Results[0].ExpenditureAmount {
@@ -377,7 +367,7 @@ func AddCoin(projectId, expense string) error {
 					}
 
 				}
-
+				//flat rule
 			} else if ruleResponse.Results[j].GlobalRuleDetails.ID == 2 {
 				expen := float64(exp)
 				conversionRate := ruleResponse.Results[j].ConversionRate
@@ -409,16 +399,16 @@ func AddCoin(projectId, expense string) error {
 
 				reqId := RequestIdGenerator()
 
-				errTracker := tracker.TrackerAddCoin(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId, 4)
+				errTracker := tracker.TrackerAddCoin(int(coins), expiry, UserResponse.Results[i].UserID, reason, ruleId, reqId, 4)
 				if errTracker != nil {
 					fmt.Printf("error occurred while tracking in add coin: %v", errTracker.Error())
 				}
 
-				// errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId, 4)
-				// if errMsg != nil {
-				// 	fmt.Printf("error while sending message in add coin: %v", errMsg.Error())
-				// 	return errMsg
-				// }
+				errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID,reason, ruleId, reqId, 4)
+				if errMsg != nil {
+					fmt.Printf("error while sending message in add coin: %v", errMsg.Error())
+					return errMsg
+				}
 
 			} else if expense == "Monthly" {
 				resp, errUserTracker := tracker.UserTracker(UserResponse.Results[i].UserID, 5)
@@ -432,12 +422,12 @@ func AddCoin(projectId, expense string) error {
 				}
 
 				reqId := RequestIdGenerator()
-				errTracker := tracker.TrackerAddCoin(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId, 5)
+				errTracker := tracker.TrackerAddCoin(int(coins), expiry, UserResponse.Results[i].UserID, reason, ruleId, reqId, 5)
 				if errTracker != nil {
 					fmt.Printf("error occurred while tracking in add coin: %v", errTracker.Error())
 				}
 
-				errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID, projectId, reason, ruleId, reqId, 5)
+				errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID, reason, ruleId, reqId, 5)
 				if errMsg != nil {
 					fmt.Printf("error while sending message in add coin: %v", errMsg.Error())
 					return errMsg
@@ -449,4 +439,3 @@ func AddCoin(projectId, expense string) error {
 
 	return nil
 }
-

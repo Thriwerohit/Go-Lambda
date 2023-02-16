@@ -36,7 +36,7 @@ func RequestIdGenerator() string {
 	return random.String(32)
 }
 
-func SendMessage(coins int, expiry time.Time, userId string, projectId string, reason string, ruleId, reqId string, id int) error {
+func SendMessage(coins int, expiry time.Time, userId string,reason string, ruleId, reqId string, id int) error {
 	cfg, errLoadDefaultConfig := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(os.Getenv("region")))
 	if errLoadDefaultConfig != nil {
 		log.Fatal(errLoadDefaultConfig)
@@ -59,7 +59,6 @@ func SendMessage(coins int, expiry time.Time, userId string, projectId string, r
 	queueBody := `{
 		"coin":` + fmt.Sprint(coins) + `,
 		"expiryDate":"` + expiry.Format("2006-01-02T15:04:05Z") + `",
-		"projectId":"` + projectId + `",
 		"reason":"` + reason + `",
 		"ruleId":"` + ruleId + `",
 		"userId":"` + userId + `",
