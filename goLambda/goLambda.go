@@ -62,12 +62,12 @@ type ParseUsers struct {
 	} `json:"results"`
 }
 
-type Expendature struct {
+type Expenditure struct {
 	ObjectID           string `json:"objectId"`
 	UserID             string `json:"userId"`
 	Expendature        int    `json:"expendature"`
-	MonthlyExpendature int    `json:"monthlyExpendature"`
-	WeeklyExpendature  int    `json:"weeklyExpendature"`
+	MonthlyExpenditure int    `json:"monthlyExpenditure"`
+	WeeklyExpenditure  int    `json:"weeklyExpenditure"`
 	Logs               []struct {
 		Coins   int    `json:"coins"`
 		AddedAt string `json:"addedAt"`
@@ -75,7 +75,7 @@ type Expendature struct {
 }
 type ParseExpedature struct {
 	Results []struct {
-		Expendature
+		Expenditure
 	} `json:"results"`
 }
 type AddCoinRequest struct {
@@ -116,7 +116,7 @@ type SubtractCoinRequest struct {
 	Reason              string  `json:"reason"`
 }
 
-type ExpendatureRule struct {
+type ExpenditureRule struct {
 	ObjectID          string `json:"objectId"`
 	ProjectID         string `json:"projectId"`
 	GlobalRuleDetails struct {
@@ -134,12 +134,12 @@ type ExpendatureRule struct {
 	IsActive          bool      `json:"isActive"`
 	RuleExpiryDate    time.Time `json:"ruleExpiryDate"`
 	MaxCoin           int       `json:"MaxCoin"`
-	ExpendatureAmount int       `json:"expendatureAmount"`
+	ExpenditureAmount int       `json:"expenditureAmount"`
 	ConversionRate    float64   `json:"conversionRate"`
 }
 type ParseRules struct {
 	Results []struct {
-		ExpendatureRule
+		ExpenditureRule
 	} `json:"results"`
 }
 
@@ -349,9 +349,9 @@ func AddCoin(projectId, expense string) error {
 		var ruleId string
 		var exp int
 		if expense == "Weekly" {
-			exp = UserResponse.Results[i].WeeklyExpendature
+			exp = UserResponse.Results[i].WeeklyExpenditure
 		} else if expense == "Monthly" {
-			exp = UserResponse.Results[i].MonthlyExpendature
+			exp = UserResponse.Results[i].MonthlyExpenditure
 		}
 		for j := 0; j < len(ruleResponse.Results); j++ {
 			if ruleResponse.Results[j].RuleExpiryDate.Before(time.Now()) || !ruleResponse.Results[j].IsActive {
@@ -360,7 +360,7 @@ func AddCoin(projectId, expense string) error {
 
 			if ruleResponse.Results[j].GlobalRuleDetails.ID == 1 {
 
-				if exp > ruleResponse.Results[0].ExpendatureAmount {
+				if exp > ruleResponse.Results[0].ExpenditureAmount {
 					coins = float64(ruleResponse.Results[0].MaxCoin)
 					expiry = ruleResponse.Results[j].CoinExpiry
 					reason = ruleResponse.Results[j].GlobalRuleDetails.RuleName

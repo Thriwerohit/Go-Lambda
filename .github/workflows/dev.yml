@@ -1,9 +1,9 @@
 name: Deploy Lambda Function
 on:
   push:
-    branches: [pointLambda]
+    branches: [dev]
   pull_request:
-    branches: [pointLambda]
+    branches: [dev]
   workflow_dispatch:
 
 jobs:
@@ -32,4 +32,4 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -a -o main main.go && zip deployment.zip main
       - name: AWS Deploy
         run: |
-          aws lambda update-function-code --function-name EventCreate --zip-file fileb://deployment.zip
+          aws lambda update-function-code --function-name dev-go-test-2 --zip-file fileb://deployment.zip
