@@ -31,12 +31,6 @@ type Event struct {
 	IsActive       bool      `json:"isActive"`
 	RuleExpiryDate time.Time `json:"ruleExpiryDate"`
 	EventDate      time.Time `json:"eventDate"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
-	UserDetails    []struct {
-		UserID      string    `json:"userId"`
-		DateOfBirth time.Time `json:"dateOfBirth"`
-	} `json:"userDetails"`
 }
 
 type ParseEventResponse struct {
@@ -64,13 +58,9 @@ type ParseUsers struct {
 type Expenditure struct {
 	ObjectID           string `json:"objectId"`
 	UserID             string `json:"userId"`
-	Expendature        int    `json:"expendature"`
+	Expenditure        int    `json:"expenditure"`
 	MonthlyExpenditure int    `json:"monthlyExpenditure"`
 	WeeklyExpenditure  int    `json:"weeklyExpenditure"`
-	Logs               []struct {
-		Coins   int    `json:"coins"`
-		AddedAt string `json:"addedAt"`
-	} `json:"logs"`
 }
 type ParseExpedature struct {
 	Results []struct {
@@ -83,6 +73,7 @@ type AddCoinRequest struct {
 	Coin       float64   `json:"coin"`
 	ExpiryDate time.Time `json:"expiryDate"`
 }
+
 type Coin struct {
 	ObjectID  string    `json:"objectId"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -241,7 +232,7 @@ func Handler() error {
 						return err
 					}
 				}
-			}//birthday event
+			} //birthday event
 		} else if eventResponse.Results[j].GlobalEventDetails.ID == 2 {
 			body := strings.NewReader(`{}`)
 
@@ -294,14 +285,13 @@ func Handler() error {
 			log.Println("error while adding coin", errAddCoin.Error())
 			return errAddCoin
 		}
-		if int(time.Now().Local().Day()) == 16 {
+	}
+	if int(time.Now().Local().Day()) == 16 {
+		errAddCoin := AddCoin("Monthly")
+		if errAddCoin != nil {
+			log.Println("error while adding coin", errAddCoin.Error())
+			return errAddCoin
 
-			errAddCoin := AddCoin("Monthly")
-			if errAddCoin != nil {
-				log.Println("error while adding coin", errAddCoin.Error())
-				return errAddCoin
-
-			}
 		}
 	}
 	return nil
@@ -325,7 +315,7 @@ func AddCoin(expense string) error {
 	}
 	// get all user across PROJECTID
 	body := strings.NewReader(`{}`)
-	_, errUser := httpClient.ParseClient("GET", "classes/expendatureLogs", body, &UserResponse)
+	_, errUser := httpClient.ParseClient("GET", "classes/expenditureLogs", body, &UserResponse)
 	if errUser != nil {
 		log.Println("error in getting rules in add coin", errUser.Error())
 		return errUser
@@ -404,7 +394,7 @@ func AddCoin(expense string) error {
 					fmt.Printf("error occurred while tracking in add coin: %v", errTracker.Error())
 				}
 
-				errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID,reason, ruleId, reqId, 4)
+				errMsg := aws.SendMessage(int(coins), expiry, UserResponse.Results[i].UserID, reason, ruleId, reqId, 4)
 				if errMsg != nil {
 					fmt.Printf("error while sending message in add coin: %v", errMsg.Error())
 					return errMsg
